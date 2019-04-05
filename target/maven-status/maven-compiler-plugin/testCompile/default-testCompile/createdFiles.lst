@@ -1,0 +1,5 @@
+edu/uci/ics/cs221/analysis/wordbreak/WordBreakTokenizerTest.class
+edu/uci/ics/cs221/analysis/punctuation/PunctuationTokenizerTest.class
+edu/uci/ics/cs221/analysis/stemmer/PorterStemmerTest.class
+edu/uci/ics/cs221/storage/MapdbDocStoreTest.class
+edu/uci/ics/cs221/search/FullScanSearcherTest.class

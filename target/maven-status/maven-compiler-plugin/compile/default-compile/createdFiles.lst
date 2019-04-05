@@ -1,0 +1,14 @@
+edu/uci/ics/cs221/analysis/StopWords.class
+edu/uci/ics/cs221/storage/DocumentStore.class
+edu/uci/ics/cs221/analysis/Tokenizer.class
+edu/uci/ics/cs221/search/FullScanSearcher.class
+edu/uci/ics/cs221/storage/Document.class
+edu/uci/ics/cs221/analysis/WordBreakTokenizer.class
+edu/uci/ics/cs221/analysis/PunctuationTokenizer.class
+edu/uci/ics/cs221/analysis/ComposableAnalyzer.class
+edu/uci/ics/cs221/analysis/PorterStemmer.class
+edu/uci/ics/cs221/storage/MapdbDocStore.class
+edu/uci/ics/cs221/analysis/NaiveAnalyzer.class
+edu/uci/ics/cs221/analysis/Stemmer.class
+edu/uci/ics/cs221/analysis/Analyzer.class
+edu/uci/ics/cs221/HelloWorld.class

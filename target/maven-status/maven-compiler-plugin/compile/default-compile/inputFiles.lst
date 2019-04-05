@@ -1,0 +1,14 @@
+/Users/sadeem/Documents/GitHub/spring19-cs221-project/src/main/java/edu/uci/ics/cs221/analysis/PunctuationTokenizer.java
+/Users/sadeem/Documents/GitHub/spring19-cs221-project/src/main/java/edu/uci/ics/cs221/analysis/ComposableAnalyzer.java
+/Users/sadeem/Documents/GitHub/spring19-cs221-project/src/main/java/edu/uci/ics/cs221/analysis/Stemmer.java
+/Users/sadeem/Documents/GitHub/spring19-cs221-project/src/main/java/edu/uci/ics/cs221/analysis/PorterStemmer.java
+/Users/sadeem/Documents/GitHub/spring19-cs221-project/src/main/java/edu/uci/ics/cs221/storage/Document.java
+/Users/sadeem/Documents/GitHub/spring19-cs221-project/src/main/java/edu/uci/ics/cs221/search/FullScanSearcher.java
+/Users/sadeem/Documents/GitHub/spring19-cs221-project/src/main/java/edu/uci/ics/cs221/analysis/WordBreakTokenizer.java
+/Users/sadeem/Documents/GitHub/spring19-cs221-project/src/main/java/edu/uci/ics/cs221/analysis/NaiveAnalyzer.java
+/Users/sadeem/Documents/GitHub/spring19-cs221-project/src/main/java/edu/uci/ics/cs221/analysis/Tokenizer.java
+/Users/sadeem/Documents/GitHub/spring19-cs221-project/src/main/java/edu/uci/ics/cs221/HelloWorld.java
+/Users/sadeem/Documents/GitHub/spring19-cs221-project/src/main/java/edu/uci/ics/cs221/analysis/StopWords.java
+/Users/sadeem/Documents/GitHub/spring19-cs221-project/src/main/java/edu/uci/ics/cs221/analysis/Analyzer.java
+/Users/sadeem/Documents/GitHub/spring19-cs221-project/src/main/java/edu/uci/ics/cs221/storage/DocumentStore.java
+/Users/sadeem/Documents/GitHub/spring19-cs221-project/src/main/java/edu/uci/ics/cs221/storage/MapdbDocStore.java
