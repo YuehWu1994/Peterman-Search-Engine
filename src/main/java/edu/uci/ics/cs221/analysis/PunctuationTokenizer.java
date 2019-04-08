@@ -5,6 +5,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+
+
 /**
  * Project 1, task 1: Implement a simple tokenizer based on punctuations and white spaces.
  *
@@ -25,10 +27,39 @@ public class PunctuationTokenizer implements Tokenizer {
         // single and double quotes, brackets, percentage sign?
     }
 
-    public PunctuationTokenizer() {}
+    public PunctuationTokenizer() {
+
+    }
 
     public List<String> tokenize(String text) {
-        throw new UnsupportedOperationException("Punctuation Tokenizer Unimplemented");
+        try{
+            List<String> res = Arrays.asList();
+
+            int l = text.length(), i = 0;
+            while(i < l){
+                String token;
+                int j = i;
+                while(j < l){
+                    if(text.charAt(j) == ' ' || punctuations.contains(text.charAt(j)) || j == l-1){
+                        token = text.substring(i, j).toLowerCase();
+
+                        // exclude stop word and empty string
+                        if(token != "" && !StopWords.stopWords.contains(token)){
+                            res.add(token);
+                        }
+
+                        i = j+1;
+                        break;
+                    }
+                    ++j;
+                }
+            }
+
+            return res;
+        } catch (Exception e) {
+            //throw new UnsupportedOperationException("Punctuation Tokenizer Unimplemented");
+            System.out.println("Punctuation Tokenizer Unimplemented");
+        }
     }
 
 }

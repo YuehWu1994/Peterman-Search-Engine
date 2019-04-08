@@ -16,7 +16,20 @@ public class PorterStemmer implements Stemmer {
     public PorterStemmer() {}
 
     public String stem(String token) {
-        throw new UnsupportedOperationException("Porter Stemmer Unimplemented");
+        try {
+            lucene_PorterStemmer s = new lucene_PorterStemmer();
+            s.reset();
+            int l = token.length();
+            for(int i = 0; i < l; ++i){
+                if(token.charAt(i) != ' ') s.add(Character.toLowerCase(token.charAt(i)));
+            }
+
+            s.stem();
+            return s.toString();
+
+        } catch(Exception e) {
+            System.out.println("Porter Stemmer Unimplemented");
+        }
     }
 
 }
