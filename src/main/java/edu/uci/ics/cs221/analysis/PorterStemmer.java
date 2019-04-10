@@ -16,8 +16,9 @@ public class PorterStemmer implements Stemmer {
     public PorterStemmer() {}
 
     public String stem(String token) {
+        lucene_PorterStemmer s = new lucene_PorterStemmer();
         try {
-            lucene_PorterStemmer s = new lucene_PorterStemmer();
+
             s.reset();
             int l = token.length();
             for(int i = 0; i < l; ++i){
@@ -25,11 +26,13 @@ public class PorterStemmer implements Stemmer {
             }
 
             s.stem();
-            return s.toString();
 
         } catch(Exception e) {
             System.out.println("Porter Stemmer Unimplemented");
         }
+
+        return s.toString();
+        //throw new UnsupportedOperationException("porter stemmer Unimplemented");
     }
 
 }

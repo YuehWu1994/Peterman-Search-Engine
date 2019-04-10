@@ -36,7 +36,6 @@ package edu.uci.ics.cs221.analysis;
 */
 
 
-import org.apache.lucene.util.ArrayUtil;
 
 /**
  *
@@ -55,7 +54,7 @@ class lucene_PorterStemmer
     private boolean dirty = false;
     private static final int INITIAL_SIZE = 50;
 
-    public PorterStemmer() {
+    public lucene_PorterStemmer() {
         b = new char[INITIAL_SIZE];
         i = 0;
     }
