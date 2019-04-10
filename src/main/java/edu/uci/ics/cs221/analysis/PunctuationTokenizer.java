@@ -1,9 +1,11 @@
 package edu.uci.ics.cs221.analysis;
 
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
 
 
 
@@ -32,19 +34,24 @@ public class PunctuationTokenizer implements Tokenizer {
     }
 
     public List<String> tokenize(String text) {
-        try{
-            List<String> res = Arrays.asList();
+        List<String> res = new ArrayList<String>();
 
+        try{
             int l = text.length(), i = 0;
             while(i < l){
                 String token;
                 int j = i;
-                while(j < l){
-                    if(text.charAt(j) == ' ' || punctuations.contains(text.charAt(j)) || j == l-1){
-                        token = text.substring(i, j).toLowerCase();
 
+                while(j < l){
+                    char ch = text.charAt(j);
+                    if(ch == ' ' || ch == '\t' || ch == '\n' || punctuations.contains(String.valueOf(ch)) || j == l-1){
+                        if(j == l-1 && ch != ' ' && ch != '\t' && ch != '\n' && !punctuations.contains(String.valueOf(ch)) ) j = l;
+
+                        token = text.substring(i, j).toLowerCase();
+                        //System.out.println(i);
+                        //System.out.println(j);
                         // exclude stop word and empty string
-                        if(token != "" && !StopWords.stopWords.contains(token)){
+                        if(token.length() != 0  && !StopWords.stopWords.contains(token)){
                             res.add(token);
                         }
 
@@ -54,12 +61,11 @@ public class PunctuationTokenizer implements Tokenizer {
                     ++j;
                 }
             }
-
-            return res;
         } catch (Exception e) {
             //throw new UnsupportedOperationException("Punctuation Tokenizer Unimplemented");
             System.out.println("Punctuation Tokenizer Unimplemented");
         }
-    }
 
+        return res;
+    }
 }
