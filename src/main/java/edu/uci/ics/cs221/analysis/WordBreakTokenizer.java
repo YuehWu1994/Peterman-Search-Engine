@@ -136,7 +136,7 @@ public class WordBreakTokenizer implements Tokenizer {
                 else {
                     token = text.substring(splitPos.get(i), splitPos.get(i + 1));
                 }
-                if (!StopWords.stopWords.contains(token) && !result.contains(token)) {
+                if (!StopWords.stopWords.contains(token)) {
                     result.add(token);
                 }
             }

@@ -222,7 +222,12 @@ public class WordBreakTokenizerTest {
     public void test19()
     {
         String text = "ThiscourseexposesstudentstoprincipalconceptsrelatedtoinformationretrievalincludingtextstemmingandtextindexinginvertedindexsearchbooleanexpressionsphrasesearchandrankingItwillalsocovertopicsofWebsearchandverticalsearchwithrelatedtechniquessuchascrawlingandsearchengineoptimizationAsignificantpartofthecourseistoimplementasearchengineusingJava";
-        List<String> expected = Arrays.asList("course","exposes","students","principal","concepts", "related", "information","retrieval","including","text", "stemming", "indexing", "inverted", "index", "search", "boolean", "expressions", "phrase", "ranking", "also", "cover", "topics", "web", "vertical", "techniques", "crawling", "engine", "optimization", "significant", "part", "implement", "using", "java");
+        List<String> expected = Arrays.asList("course","exposes","students","principal","concepts",
+                "related", "information","retrieval","including","text", "stemming", "text",
+                "indexing", "inverted", "index", "search", "boolean", "expressions", "phrase",
+                "search", "ranking", "also", "cover", "topics", "web", "search", "vertical", "search",
+                "related", "techniques", "crawling", "search", "engine", "optimization", "significant",
+                "part", "course", "implement", "search", "engine", "using", "java");
         WordBreakTokenizer tokenizer = new WordBreakTokenizer();
 
         assertEquals(expected, tokenizer.tokenize(text));
