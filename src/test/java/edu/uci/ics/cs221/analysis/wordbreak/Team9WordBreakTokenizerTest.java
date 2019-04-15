@@ -3,6 +3,7 @@ package edu.uci.ics.cs221.analysis.wordbreak;
 import edu.uci.ics.cs221.analysis.WordBreakTokenizer;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -10,11 +11,11 @@ import static org.junit.Assert.assertEquals;
 
 public class Team9WordBreakTokenizerTest {
 
-    // Test1: test for empty input
+    // Test1: test for empty input, should return an empty list
     @Test
     public void test1() {
         String text = "";
-        List<String> expected = Arrays.asList("");
+        List<String> expected = Arrays.asList();
         WordBreakTokenizer tokenizer = new WordBreakTokenizer();
 
         assertEquals(expected, tokenizer.tokenize(text));
@@ -45,7 +46,7 @@ public class Team9WordBreakTokenizerTest {
 
     // Test4: invalid input, expect an exception.
     // exception type depends on the implementation.
-    @Test(expected = IllegalArgumentException.class)
+    @Test(expected = RuntimeException.class)
     public void test4() {
         String text = "abc123";
         WordBreakTokenizer tokenizer = new WordBreakTokenizer();
