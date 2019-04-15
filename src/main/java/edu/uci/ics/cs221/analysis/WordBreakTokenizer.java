@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 
+
 /**
  * Project 1, task 2: Implement a Dynamic-Programming based Word-Break Tokenizer.
  * <p>
@@ -37,12 +38,28 @@ public class WordBreakTokenizer implements Tokenizer {
     long freqSum;
     int maxTokenLen;
 
+    public static Map<String, Double> probability = new HashMap<>();
+
     public WordBreakTokenizer() {
         try {
             // load the dictionary corpus
             URL dictResource = WordBreakTokenizer.class.getClassLoader().getResource("cs221_frequency_dictionary_en.txt");
             List<String> dictLines = Files.readAllLines(Paths.get(dictResource.toURI()));
             initializeMap(dictLines);
+
+
+            double total = 0;
+
+            for (String dictLine : dictLines) {
+                String[] spl = dictLine.split(" ", 2);
+                total += Double.parseDouble(spl[1]);
+            }
+
+            for (String dictLine : dictLines) {
+                if(dictLine.startsWith("\uFEFF")) dictLine = dictLine.substring(1);
+                String[] spl = dictLine.split(" ", 2);
+                probability.put(spl[0], Double.parseDouble(spl[1])/total);
+            }
 
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -142,6 +159,7 @@ public class WordBreakTokenizer implements Tokenizer {
             }
 
         return result;
+
     }
 
 }
