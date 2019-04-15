@@ -22,7 +22,7 @@ public class PorterStemmer implements Stemmer {
             s.reset();
             int l = token.length();
             for(int i = 0; i < l; ++i){
-                if(token.charAt(i) != ' ') s.add(Character.toLowerCase(token.charAt(i)));
+                if(token.charAt(i) != ' ') s.add(token.charAt(i));
             }
 
             s.stem();

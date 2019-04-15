@@ -42,7 +42,7 @@ public class WordBreakTokenizer implements Tokenizer {
     public WordBreakTokenizer() {
         try {
             // load the dictionary corpus
-            URL dictResource = WordBreakTokenizer.class.getClassLoader().getResource("japanese_dictionary_twitter_freq.txt");
+            URL dictResource = WordBreakTokenizer.class.getClassLoader().getResource("cs221_frequency_dictionary_en.txt");
             List<String> dictLines = Files.readAllLines(Paths.get(dictResource.toURI()));
 
 
@@ -56,10 +56,8 @@ public class WordBreakTokenizer implements Tokenizer {
             for (String dictLine : dictLines) {
                 if(dictLine.startsWith("\uFEFF")) dictLine = dictLine.substring(1);
                 String[] spl = dictLine.split(" ", 2);
-
                 probability.put(spl[0], Double.parseDouble(spl[1])/total);
             }
-
 
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -70,7 +68,7 @@ public class WordBreakTokenizer implements Tokenizer {
         //throw new UnsupportedOperationException("Word Break Unimplemented");
 
         // check when text has a word not in dictionary and has spaces and question mark,
-        String[] tok = text.split("[\\p{Punct}\\s]+");
+        String[] tok = text.split("[\\p{Punct}&&[^']]+");
         if(tok[0] != text) throw new UnsupportedOperationException();
 
 
@@ -91,6 +89,8 @@ public class WordBreakTokenizer implements Tokenizer {
                     for(int i = left; i < right; ++i){
 
                         if(wordProb[left][i] != 0 && wordProb[i+1][right] != 0 && wordProb[left][i] * wordProb[i+1][right] > mxFreq){
+                            //System.out.println(wordProb[left][i]);
+                            //System.out.println(wordProb[i+1][right]);
                             endP = i;
                             mxFreq = wordProb[left][i] * wordProb[i+1][right];
                         }
@@ -99,6 +99,7 @@ public class WordBreakTokenizer implements Tokenizer {
                     // no split, consider as 1 string
                     String strWhole = text.substring(left, right+1).toLowerCase();
                     if(probability.containsKey(strWhole) && probability.get(strWhole) > mxFreq) {
+                        System.out.println("whole");
                         endP = right;
                         mxFreq = probability.get(strWhole);
 
@@ -106,9 +107,10 @@ public class WordBreakTokenizer implements Tokenizer {
 
                     wordProb[left][right] = mxFreq;
                     endPoint[left][right] = endP;
-                    //System.out.println(left);
-                    //System.out.println(right);
-                    //System.out.println(endP);
+//                    System.out.println(left);
+//                    System.out.println(right);
+//                    System.out.println(mxFreq);
+//                    System.out.println(endP);
                 }
             }
 

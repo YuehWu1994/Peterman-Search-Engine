@@ -44,8 +44,8 @@ public class PunctuationTokenizer implements Tokenizer {
 
                 while(j < l){
                     char ch = text.charAt(j);
-                    if(ch == ' ' || ch == '\t' || ch == '\n' || punctuations.contains(String.valueOf(ch)) || j == l-1){
-                        if(j == l-1 && ch != ' ' && ch != '\t' && ch != '\n' && !punctuations.contains(String.valueOf(ch)) ) j = l;
+                    if(ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || punctuations.contains(String.valueOf(ch)) || j == l-1){
+                        if(j == l-1 && ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r' && !punctuations.contains(String.valueOf(ch)) ) j = l;
 
                         token = text.substring(i, j).toLowerCase();
                         //System.out.println(i);
