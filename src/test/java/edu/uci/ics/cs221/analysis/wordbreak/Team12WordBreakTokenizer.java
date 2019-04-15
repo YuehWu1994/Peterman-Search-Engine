@@ -36,7 +36,7 @@ public class Team12WordBreakTokenizer {
     @Test(expected = UnsupportedOperationException.class)
     public void test3()
     {
-        String text = "WheredidGhadago?";
+        String text = "Where did Ghada go?";
         WordBreakTokenizer tokenizer = new WordBreakTokenizer();
         tokenizer.tokenize(text);
     }
