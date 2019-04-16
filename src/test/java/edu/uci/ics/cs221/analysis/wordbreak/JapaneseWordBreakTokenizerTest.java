@@ -40,4 +40,25 @@ public class JapaneseWordBreakTokenizerTest {
 
         assertEquals(expected, tokenizer.tokenize(text));
     }
+
+    @Test
+    public void test23()
+    {
+        String text = "二兎を追う者は一兎をも得ず";
+        List<String> expected = Arrays.asList("二", "兎", "を", "追う", "者", "は", "一", "兎", "を", "も", "得", "ず");//here the
+        // last token can be split into three characters but their probability would be much lower
+        JapaneseWordBreakTokenizer tokenizer = new JapaneseWordBreakTokenizer();
+
+        assertEquals(expected, tokenizer.tokenize(text));
+    }
+
+    @Test
+    public void test24()
+    {
+        String text = "門前の小僧習わぬ経を読む";
+        List<String> expected = Arrays.asList("門前", "の", "小僧", "習わ", "ぬ", "経", "を", "読む");
+        JapaneseWordBreakTokenizer tokenizer = new JapaneseWordBreakTokenizer();
+
+        assertEquals(expected, tokenizer.tokenize(text));
+    }
 }
