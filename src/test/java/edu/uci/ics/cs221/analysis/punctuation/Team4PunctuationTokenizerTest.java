@@ -22,12 +22,10 @@ public class Team4PunctuationTokenizerTest {
         System.out.println("It: can deal with empty string");
 
         String emptyText = "";
-        String nullText = null;
         List<String> expected = new ArrayList<>();
         PunctuationTokenizer tokenizer = new PunctuationTokenizer();
 
         assertEquals(expected, tokenizer.tokenize(emptyText));
-        assertEquals(expected, tokenizer.tokenize(nullText));
     }
 
     /**

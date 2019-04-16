@@ -33,7 +33,7 @@ public class Team12WordBreakTokenizer {
     }
     //this test checks that when text has a word not in dictionary and has spaces and question mark,
     //then it should throw an exception
-    @Test(expected = UnsupportedOperationException.class)
+    @Test(expected = RuntimeException.class)
     public void test3()
     {
         String text = "Where did Ghada go?";

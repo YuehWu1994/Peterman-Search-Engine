@@ -11,7 +11,7 @@ import static org.junit.Assert.assertEquals;
 public class JapaneseWordBreakTokenizerTest {
 
     @Test
-    public void test20()
+    public void test1()
     {
         String text = "蓼食う虫も好き好き";
         List<String> expected = Arrays.asList("蓼", "食う", "虫", "も", "好き", "好き");
@@ -21,7 +21,7 @@ public class JapaneseWordBreakTokenizerTest {
     }
 
     @Test
-    public void test21()
+    public void test2()
     {
         String text = "猿も木から落ちる";
         List<String> expected = Arrays.asList("猿", "も", "木", "から", "落ちる");//here the
@@ -32,7 +32,7 @@ public class JapaneseWordBreakTokenizerTest {
     }
 
     @Test
-    public void test22()
+    public void test3()
     {
         String text = "虎穴に入らずんば虎子を得ず";
         List<String> expected = Arrays.asList("虎", "穴", "に", "入ら", "ず", "ん", "ば", "虎", "子", "を", "得", "ず");
@@ -42,7 +42,7 @@ public class JapaneseWordBreakTokenizerTest {
     }
 
     @Test
-    public void test23()
+    public void test4()
     {
         String text = "二兎を追う者は一兎をも得ず";
         List<String> expected = Arrays.asList("二", "兎", "を", "追う", "者", "は", "一", "兎", "を", "も", "得", "ず");//here the
@@ -53,7 +53,7 @@ public class JapaneseWordBreakTokenizerTest {
     }
 
     @Test
-    public void test24()
+    public void test5()
     {
         String text = "門前の小僧習わぬ経を読む";
         List<String> expected = Arrays.asList("門前", "の", "小僧", "習わ", "ぬ", "経", "を", "読む");
