@@ -38,28 +38,12 @@ public class WordBreakTokenizer implements Tokenizer {
     long freqSum;
     int maxTokenLen;
 
-    public static Map<String, Double> probability = new HashMap<>();
-
     public WordBreakTokenizer() {
         try {
             // load the dictionary corpus
             URL dictResource = WordBreakTokenizer.class.getClassLoader().getResource("cs221_frequency_dictionary_en.txt");
             List<String> dictLines = Files.readAllLines(Paths.get(dictResource.toURI()));
             initializeMap(dictLines);
-
-
-            double total = 0;
-
-            for (String dictLine : dictLines) {
-                String[] spl = dictLine.split(" ", 2);
-                total += Double.parseDouble(spl[1]);
-            }
-
-            for (String dictLine : dictLines) {
-                if(dictLine.startsWith("\uFEFF")) dictLine = dictLine.substring(1);
-                String[] spl = dictLine.split(" ", 2);
-                probability.put(spl[0], Double.parseDouble(spl[1])/total);
-            }
 
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -91,6 +75,17 @@ public class WordBreakTokenizer implements Tokenizer {
         }
     }
 
+    /**
+     * algorithm is taken from the slides' suggested youtube video
+     * https://github.com/mission-peace/interview/blob/master/src/com/interview/dynamic/BreakMultipleWordsWithNoSpaceIntoSpace.java
+     *
+     * Changes Made:
+     * 1. created a class WordBreakAnalyzer to keep for each segment the split positions
+     * for each token and each segment probability
+     * 2. return only the best segment and not all possible segments by comparing the probabilities by making
+     * WordBreakAnalyzer implement Comparable
+     * 3. also saving space by adding the result only if the list of segments is more than 1
+     */
     private List<WordBreakAnalyzer> wordBreakUtil(String s, Map<Integer, List<WordBreakAnalyzer>> dp, int start) {
         if (start == s.length()) {
             return Collections.singletonList(null);
@@ -119,6 +114,7 @@ public class WordBreakTokenizer implements Tokenizer {
                 newSegment.getSplitPos().add(0,start);
                 segments.add(newSegment);
                 Collections.sort(segments);//to sort segments based on the probability
+                // although sort is expensive, but the list would always have two or less elements
                 if(segments.size() > 1)
                 {
                     segments.remove(0);//added this line to save memory space
