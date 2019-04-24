@@ -1,12 +1,12 @@
 package edu.uci.ics.cs221.index.inverted;
 
 public class Location {
-    public int Page;
-    public int Offset;
+    public short Page;
+    public short Offset;
 
     Location(int page, int offset){
-        Page = page;
-        Offset = offset;
+        Page = (short) page;
+        Offset = (short) offset;
     }
 
 

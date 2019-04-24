@@ -66,7 +66,7 @@ public class InvertedIndexManager {
     /**
      * Total length of keyword (in order to build dictionary on page file)
      */
-    public static Integer totalLengKeyword = 0;
+    public static Integer totalLengthKeyword = 0;
 
 
     private InvertedIndexManager(String indexFolder, Analyzer analyzer) {
@@ -114,7 +114,7 @@ public class InvertedIndexManager {
         for(String w : word){
             if(!keyWordMap.containsKey(w)){
                 keyWordMap.put(w, new ArrayList());
-                totalLengKeyword += w.length();
+                totalLengthKeyword += w.length();
             }
 
             keyWordMap.get(w).add(document_Counter);
@@ -138,12 +138,18 @@ public class InvertedIndexManager {
     public void flush() {
         // throw new UnsupportedOperationException();
 
-        SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get("./segment" + NUM_SEQ), totalLengKeyword, keyWordMap.size());
+        SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get("./segment" + NUM_SEQ));
+
+        // allocate the position on start point of keyword
+        segMgr.allocateDictStart(totalLengthKeyword);
 
         // insert keyword, metadata, docID respectively
         for (Map.Entry<String, List<Integer>> entry : keyWordMap.entrySet()) {
             segMgr.insertKeyWord(entry.getKey());
         }
+
+        // allocate the number of keyword on start point of dictionary
+        segMgr.allocateNumberOfKeyWord(keyWordMap.size());
 
         for (Map.Entry<String, List<Integer>> entry : keyWordMap.entrySet()) {
             segMgr.insertListOfDocID(entry.getValue());
@@ -163,7 +169,7 @@ public class InvertedIndexManager {
         ++ NUM_SEQ;
         keyWordMap.clear();
         document_Counter = 0;
-        totalLengKeyword = 0;
+        totalLengthKeyword = 0;
     }
 
     /**
