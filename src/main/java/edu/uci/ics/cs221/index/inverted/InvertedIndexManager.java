@@ -5,6 +5,7 @@ import edu.uci.ics.cs221.analysis.Analyzer;
 import edu.uci.ics.cs221.analysis.ComposableAnalyzer;
 import edu.uci.ics.cs221.analysis.PorterStemmer;
 import edu.uci.ics.cs221.analysis.PunctuationTokenizer;
+import edu.uci.ics.cs221.storage.DocumentStore;
 import edu.uci.ics.cs221.storage.MapdbDocStore;
 import edu.uci.ics.cs221.storage.Document;
 
@@ -18,6 +19,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
+import java.io.File;
 
 /**
  * This class manages an disk-based inverted index and all the documents in the inverted index.
@@ -47,10 +49,6 @@ public class InvertedIndexManager {
      */
     public static Map<String, List<Integer>> keyWordMap = new HashMap<>();
 
-    /**
-     * DocStore Instance
-     */
-    public static MapdbDocStore mapDB;
 
     /**
      * Number of sequence in disk (for merge)
@@ -121,14 +119,15 @@ public class InvertedIndexManager {
         }
 
         // add document into DocStore
-        mapDB.createOrOpen("Doc_Store" + NUM_SEQ);
+        DocumentStore mapDB = MapdbDocStore.createOrOpen("Doc_Store" + NUM_SEQ); // not sure
         mapDB.addDocument(document_Counter, document);
         mapDB.close();
 
         ++document_Counter;
 
-        // check whether FLUSH_THRESHOLD is satisfied
-        if(NUM_SEQ == DEFAULT_FLUSH_THRESHOLD) flush();
+        if(document_Counter == DEFAULT_FLUSH_THRESHOLD) flush();
+
+        if(NUM_SEQ == DEFAULT_MERGE_THRESHOLD) mergeAllSegments();
     }
 
     /**
@@ -152,13 +151,14 @@ public class InvertedIndexManager {
         segMgr.allocateNumberOfKeyWord(keyWordMap.size());
 
         for (Map.Entry<String, List<Integer>> entry : keyWordMap.entrySet()) {
-            segMgr.insertListOfDocID(entry.getValue());
-        }
-
-        for (Map.Entry<String, List<Integer>> entry : keyWordMap.entrySet()) {
             segMgr.insertMetaDataSlot(entry.getKey().length(), entry.getValue().size()*Integer.BYTES);
         }
 
+        for (Map.Entry<String, List<Integer>> entry : keyWordMap.entrySet()) {
+            segMgr.insertListOfDocID(entry.getValue());
+        }
+
+        segMgr.allocateDocIDEnd();
 
         segMgr.close();
 
@@ -178,8 +178,197 @@ public class InvertedIndexManager {
     public void mergeAllSegments() {
         // merge only happens at even number of segments
         Preconditions.checkArgument(getNumSegments() % 2 == 0);
-        throw new UnsupportedOperationException();
+        //throw new UnsupportedOperationException();
+
+        String seg1 = "";
+        File p = new File(".");
+        String[] entries = p.list();
+        // assume to file is ordered !!!!!!!!!!!!!!!!!! not sure (naming problem)
+        for (int i = 0; i < entries.length; ++i) {
+            if(entries[i].substring(0,7) == "segment"){
+                if(seg1 != ""){
+                    // merge
+                    merge(seg1, entries[i]);
+
+                    // after merge
+                    seg1 = "";
+                }
+                else seg1 = entries[i];
+            }
+        }
     }
+
+    public void merge(String seg1, String seg2){
+        // get segment id and docId size
+        int sz1, sz2;
+        int id1 = Integer.parseInt(seg1.substring(7));
+        int id2 = Integer.parseInt(seg2.substring(7));
+
+
+        DocumentStore mapDB1 = MapdbDocStore.createOrOpen("Doc_Store" + id1);
+        sz1 = (int)mapDB1.size();
+
+
+        DocumentStore mapDB2 = MapdbDocStore.createOrOpen("Doc_Store" + id2);
+        sz2 = (int)mapDB2.size();
+        /*
+         * create map to store keyword and dictionary pair, the list either contain 3 attributes or 6 attributes
+         * segId(either 0,1) | page | offset | length
+         * If the keyword exist in both segments, the list would have two dictionary (6 attribute)
+         */
+        Map<String, List<Integer>> mergedMap = new HashMap<>();
+
+        SegmentInDiskManager segMgr1 = new SegmentInDiskManager(Paths.get("./segment" + id1));
+        SegmentInDiskManager segMgr2 = new SegmentInDiskManager(Paths.get("./segment" + id2));
+        segMgr1.readInitiate(); segMgr2.readInitiate();
+
+
+        // read to fill the map
+        int totalLengthKeyword = fillTheMap(mergedMap, segMgr1, segMgr2);
+
+        SegmentInDiskManager segMgrMerge = new SegmentInDiskManager(Paths.get("./mergedSegment"));
+
+        // insert to new segment
+        insertAtMergedSegment(mergedMap, segMgr1, segMgr2, segMgrMerge, totalLengthKeyword, sz1);
+
+        // add documentStore at doc1 toward doc0
+        for(int i = 0 ; i < sz2; ++i){
+            Document d = mapDB2.getDocument(0);
+            mapDB1.addDocument(i+sz1, d);
+        }
+        mapDB1.close();
+        mapDB2.close();
+
+
+        // close
+        segMgr1.close();
+        segMgr2.close();
+        segMgrMerge.close();
+
+
+        deleteAndRename(id1, id2);
+    }
+
+    // segId(either 0,1) | page | offset | length
+    public int fillTheMap(Map<String, List<Integer>> mergedMap, SegmentInDiskManager segMgr1, SegmentInDiskManager segMgr2){
+        int totalLengthKeyword = 0;
+        while(segMgr1.hasKeyWord() || segMgr2.hasKeyWord()){
+            String k1 = "", k2 = "";
+            List<Integer> l1 = new ArrayList<>(), l2 = new ArrayList<>();
+
+            if(segMgr1.hasKeyWord()){
+                k1 = segMgr1.readKeywordAndDict(l1);
+                l1.add(0, 0);
+            }
+            if(segMgr2.hasKeyWord()){
+                k2 = segMgr2.readKeywordAndDict(l2);
+                l2.add(0, 1);
+            }
+
+            int cmp = k1.compareTo(k2);
+            if(cmp == 0){
+                totalLengthKeyword += k1.length();
+                l1.addAll(l2);
+                mergedMap.put(k1, l1);
+                segMgr1.nextDict();
+                segMgr2.nextDict();
+            }
+            else if(k2.isEmpty() || (cmp < 0 && !k1.isEmpty() )){
+                totalLengthKeyword += k1.length();
+                mergedMap.put(k1, l1);
+                segMgr1.nextDict();
+            }
+            else{
+                totalLengthKeyword += k2.length();
+                mergedMap.put(k2, l2);
+                segMgr2.nextDict();
+            }
+        }
+        return totalLengthKeyword;
+    }
+
+
+    public void insertAtMergedSegment(Map<String, List<Integer>> mergedMap, SegmentInDiskManager segMgr1, SegmentInDiskManager segMgr2, SegmentInDiskManager segMgrMerge, int totalLengthKeyword, int sz1){
+        // allocate the position on start point of keyword
+        segMgrMerge.allocateDictStart(totalLengthKeyword);
+
+
+        // insert keyword, metadata, docID respectively
+        for (Map.Entry<String, List<Integer>> entry : mergedMap.entrySet()) {
+            segMgrMerge.insertKeyWord(entry.getKey());
+        }
+
+
+        // allocate the number of keyword on start point of dictionary
+        segMgrMerge.allocateNumberOfKeyWord(mergedMap.size());
+
+        for (Map.Entry<String, List<Integer>> entry : mergedMap.entrySet()) {
+            int docIdLength =  entry.getValue().get(3);
+
+            // if this key word exists in both segments
+            if(entry.getValue().size() == 8) docIdLength += entry.getValue().get(7);
+
+            segMgrMerge.insertMetaDataSlot(entry.getKey().length(), docIdLength);
+        }
+
+
+        // read docId from segment 1, 2 and write to new segment
+        for (Map.Entry<String, List<Integer>> entry : mergedMap.entrySet()) {
+            List<Integer> docIdList1 = new ArrayList<>(), docIdList2 = new ArrayList<>();
+
+            List<Integer> v = entry.getValue();
+
+            // the keyword exist in both segments
+            if(v.size() == 8){
+                docIdList1 = segMgr1.readDocIdList(v.get(3));
+                docIdList2 = segMgr2.readDocIdList(v.get(7));
+            }
+            else{
+                // exist in either  1st/2nd segment
+                if(v.get(0) == 0)  docIdList1 = segMgr1.readDocIdList(v.get(3));
+                else docIdList2 = segMgr2.readDocIdList(v.get(3));
+            }
+
+            // convert docId in segment 2
+            for(int i : docIdList2) i += sz1;
+
+            // concat docId2 to docId1
+            docIdList1.addAll(docIdList2);
+
+            segMgrMerge.insertListOfDocID(docIdList1);
+        }
+
+
+        segMgrMerge.allocateDocIDEnd();
+    }
+
+    public void deleteAndRename(int id1, int id2){
+        // delete segment
+        File f1, f2;
+        f1 = new File("./segment" + id1);
+        f2 = new File("./segment" + id2);
+        f1.delete(); f2.delete();
+
+        // rename segment
+        f1 = new File("./mergedSegment");
+        f2 = new File("./segment" + id1/2);
+        boolean success = f1.renameTo(f2);
+
+        if(!success) throw new UnsupportedOperationException("rename segment fail");
+
+
+        // delete 2nd document store
+        f2 = new File("Doc_Store" + id2);
+        f2.delete();
+
+        // rename 1st document store
+        f1 = new File("Doc_Store" + id1);
+        f2 = new File("Doc_Store" + id1/2);
+        success = f1.renameTo(f2);
+
+        if(!success) throw new UnsupportedOperationException("rename docstore fail");
+    }
+
 
     /**
      * Performs a single keyword search on the inverted index.
@@ -243,7 +432,13 @@ public class InvertedIndexManager {
      * Q: used in disk or in-memory
      */
     public int getNumSegments() {
-        throw new UnsupportedOperationException();
+        int cnt = 0;
+        File p = new File(".");
+        String[] entries = p.list();
+        for (int i = 0; i < entries.length; ++i) {
+            if(entries[i].substring(0,7) == "segment") ++cnt;
+        }
+        return cnt;
     }
 
     /**
