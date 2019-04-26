@@ -211,10 +211,12 @@ public class InvertedIndexManager {
 
         DocumentStore mapDB2 = MapdbDocStore.createOrOpen("Doc_Store" + id2);
         sz2 = (int)mapDB2.size();
+
+
         /*
-         * create map to store keyword and dictionary pair, the list either contain 3 attributes or 6 attributes
-         * segId(either 0,1) | page | offset | length
-         * If the keyword exist in both segments, the list would have two dictionary (6 attribute)
+         * create map to store keyword and dictionary pair, the list either contain 4 attributes or 8 attributes
+         * Specification of value at Map : segId(either 0,1) | page | offset | length  , stored at List of integer
+         * If the keyword exist in both segments, the list would have two dictionary (8 attribute)
          */
         Map<String, List<Integer>> mergedMap = new HashMap<>();
 
@@ -249,7 +251,7 @@ public class InvertedIndexManager {
         deleteAndRename(id1, id2);
     }
 
-    // segId(either 0,1) | page | offset | length
+    // Specification of value at Map : segId(either 0,1) | page | offset | length  , stored at List of integer
     public int fillTheMap(Map<String, List<Integer>> mergedMap, SegmentInDiskManager segMgr1, SegmentInDiskManager segMgr2){
         int totalLengthKeyword = 0;
         while(segMgr1.hasKeyWord() || segMgr2.hasKeyWord()){
