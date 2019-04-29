@@ -15,11 +15,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.ArrayList;
 import java.io.File;
+
 
 /**
  * This class manages an disk-based inverted index and all the documents in the inverted index.
@@ -47,7 +50,7 @@ public class InvertedIndexManager {
     /**
      * Map keyword with list of document ID
      */
-    public static Map<String, List<Integer>> keyWordMap = new HashMap<>();
+    public static Map<String, Set<Integer>> keyWordMap = new HashMap<>();
 
 
     /**
@@ -111,8 +114,8 @@ public class InvertedIndexManager {
         // record on hashmap
         for(String w : word){
             if(!keyWordMap.containsKey(w)){
-                keyWordMap.put(w, new ArrayList());
-                totalLengthKeyword += w.length();
+                keyWordMap.put(w, new HashSet<>());
+                totalLengthKeyword += w.getBytes().length;
             }
 
             keyWordMap.get(w).add(document_Counter);
@@ -121,6 +124,7 @@ public class InvertedIndexManager {
         // add document into DocStore
         DocumentStore mapDB = MapdbDocStore.createOrOpen("Doc_Store" + NUM_SEQ); // not sure
         mapDB.addDocument(document_Counter, document);
+        //System.out.println(mapDB.size());
         mapDB.close();
 
         ++document_Counter;
@@ -136,33 +140,39 @@ public class InvertedIndexManager {
      */
     public void flush() {
         // throw new UnsupportedOperationException();
+        if(document_Counter == 0) return;
 
         SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get("./segment" + NUM_SEQ));
 
         // allocate the position on start point of keyword
-        segMgr.allocateDictStart(totalLengthKeyword);
+        segMgr.allocateKeywordStart(totalLengthKeyword);
 
         // insert keyword, metadata, docID respectively
-        for (Map.Entry<String, List<Integer>> entry : keyWordMap.entrySet()) {
+        System.out.println("##### Start to insert keyword #####");
+        for (Map.Entry<String, Set<Integer>> entry : keyWordMap.entrySet()) {
             segMgr.insertKeyWord(entry.getKey());
         }
 
         // allocate the number of keyword on start point of dictionary
         segMgr.allocateNumberOfKeyWord(keyWordMap.size());
 
-        for (Map.Entry<String, List<Integer>> entry : keyWordMap.entrySet()) {
-            segMgr.insertMetaDataSlot(entry.getKey().length(), entry.getValue().size()*Integer.BYTES);
+        System.out.println("##### Start to insert dictionary slot #####");
+        for (Map.Entry<String, Set<Integer>> entry : keyWordMap.entrySet()) {
+            segMgr.insertMetaDataSlot(entry.getKey().getBytes().length, entry.getValue().size()*Integer.BYTES);
         }
 
-        for (Map.Entry<String, List<Integer>> entry : keyWordMap.entrySet()) {
+        System.out.println("##### Start to insert docID #####");
+        for (Map.Entry<String, Set<Integer>> entry : keyWordMap.entrySet()) {
+            System.out.println("Insert docID of " + entry.getKey());
             segMgr.insertListOfDocID(entry.getValue());
         }
 
-        segMgr.allocateDocIDEnd();
+        //segMgr.allocateDocIDEnd();
 
         segMgr.close();
 
         reset();
+        System.out.println("\n\n");
     }
 
     public void reset(){
@@ -185,7 +195,7 @@ public class InvertedIndexManager {
         String[] entries = p.list();
         // assume to file is ordered !!!!!!!!!!!!!!!!!! not sure (naming problem)
         for (int i = 0; i < entries.length; ++i) {
-            if(entries[i].substring(0,7) == "segment"){
+            if(entries[i].substring(0,7).equals("segment")){
                 if(seg1 != ""){
                     // merge
                     merge(seg1, entries[i]);
@@ -269,19 +279,19 @@ public class InvertedIndexManager {
 
             int cmp = k1.compareTo(k2);
             if(cmp == 0){
-                totalLengthKeyword += k1.length();
+                totalLengthKeyword += k1.getBytes().length;
                 l1.addAll(l2);
                 mergedMap.put(k1, l1);
                 segMgr1.nextDict();
                 segMgr2.nextDict();
             }
             else if(k2.isEmpty() || (cmp < 0 && !k1.isEmpty() )){
-                totalLengthKeyword += k1.length();
+                totalLengthKeyword += k1.getBytes().length;
                 mergedMap.put(k1, l1);
                 segMgr1.nextDict();
             }
             else{
-                totalLengthKeyword += k2.length();
+                totalLengthKeyword += k2.getBytes().length;
                 mergedMap.put(k2, l2);
                 segMgr2.nextDict();
             }
@@ -292,7 +302,7 @@ public class InvertedIndexManager {
 
     public void insertAtMergedSegment(Map<String, List<Integer>> mergedMap, SegmentInDiskManager segMgr1, SegmentInDiskManager segMgr2, SegmentInDiskManager segMgrMerge, int totalLengthKeyword, int sz1){
         // allocate the position on start point of keyword
-        segMgrMerge.allocateDictStart(totalLengthKeyword);
+        segMgrMerge.allocateKeywordStart(totalLengthKeyword);
 
 
         // insert keyword, metadata, docID respectively
@@ -310,7 +320,7 @@ public class InvertedIndexManager {
             // if this key word exists in both segments
             if(entry.getValue().size() == 8) docIdLength += entry.getValue().get(7);
 
-            segMgrMerge.insertMetaDataSlot(entry.getKey().length(), docIdLength);
+            segMgrMerge.insertMetaDataSlot(entry.getKey().getBytes().length, docIdLength);
         }
 
 
@@ -337,11 +347,11 @@ public class InvertedIndexManager {
             // concat docId2 to docId1
             docIdList1.addAll(docIdList2);
 
-            segMgrMerge.insertListOfDocID(docIdList1);
+            segMgrMerge.insertListOfDocID(new HashSet<>(docIdList1));
         }
 
 
-        segMgrMerge.allocateDocIDEnd();
+        //segMgrMerge.allocateDocIDEnd();
     }
 
     public void deleteAndRename(int id1, int id2){
@@ -437,9 +447,11 @@ public class InvertedIndexManager {
         int cnt = 0;
         File p = new File(".");
         String[] entries = p.list();
+        //System.out.println(entries.length);
         for (int i = 0; i < entries.length; ++i) {
-            if(entries[i].substring(0,7) == "segment") ++cnt;
+            if(entries[i].length() > 7 && entries[i].substring(0,7).equals("segment")) ++cnt;
         }
+        //System.out.println(cnt);
         return cnt;
     }
 
@@ -452,7 +464,48 @@ public class InvertedIndexManager {
      * Q: used in disk or in-memory
      */
     public InvertedIndexSegmentForTest getIndexSegment(int segmentNum) {
-        throw new UnsupportedOperationException();
+        //throw new UnsupportedOperationException();
+        Map<String, List<Integer>> invertedLists = new HashMap<>();
+        Map<Integer, Document> documents = new HashMap<>();
+
+        // ##### invertedLists  #####
+        SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get("./segment" + segmentNum));
+        segMgr.readInitiate();
+
+        // create map(String, List<Integer>) to store keyword and dictionary pair, the list contain 4 attributes
+        Map<String, List<Integer>> dictMap = new HashMap<>();
+
+
+        // read keyword and dictionary from segment
+        while(segMgr.hasKeyWord()){
+            List<Integer> l1 = new ArrayList<>();
+            String k1 = segMgr.readKeywordAndDict(l1);
+
+            l1.add(0, 0);
+            dictMap.put(k1, l1);
+
+            segMgr.nextDict();
+        }
+
+        // read docId from segment and write to invertedLists
+        for (Map.Entry<String, List<Integer>> entry : dictMap.entrySet()) {
+            List<Integer> v = entry.getValue();
+
+            List<Integer> docIdList1 = segMgr.readDocIdList(v.get(3));
+
+            invertedLists.put(entry.getKey(), docIdList1);
+
+        }
+
+        // documents
+        DocumentStore mapDB = MapdbDocStore.createOrOpen("Doc_Store" + segmentNum);
+        Iterator<Map.Entry<Integer, Document>> it = mapDB.iterator();
+        while(it.hasNext()){
+            Map.Entry<Integer, Document> m = it.next();
+            documents.put(m.getKey(), m.getValue());
+        }
+
+        return new InvertedIndexSegmentForTest(invertedLists, documents);
     }
 
 
