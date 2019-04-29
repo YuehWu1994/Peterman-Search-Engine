@@ -61,7 +61,7 @@ public class SegmentInDiskManager {
     }
 
     /*
-     * | keywordPage | keyword offset | list page | list offset |
+     * | keywordPage | keyword offset | keyword length | list page | list offset | list length
      */
     public void insertMetaDataSlot(int keyLength, int valueLength){
         insertShort(keyWordPos.Page);
@@ -77,49 +77,6 @@ public class SegmentInDiskManager {
 
     public void insertListOfDocID(List<Integer> lst){
         for(Integer i : lst) insertInteger(i);
-    }
-
-    public void insertString(String str){
-        if(str.length() > byteBuffer.remaining()){
-            // split into 2 substring and insert into page respectively
-            Pair<byte[] , byte[]> byteP = splitStringToByte(byteBuffer.remaining(), str);
-
-            // allocate two byte array
-            allocateBytePair(byteP);
-        }
-        else{
-            byte[] byteStr = str.getBytes();
-            byteBuffer.put(byteStr);
-            pointPos.Offset += str.length();
-        }
-    }
-
-    public void insertShort(short sh){
-        if(Short.BYTES > byteBuffer.remaining()){
-            // split into 2 substring and insert into page respectively
-            Pair<byte[] , byte[]> byteP = splitShortToByte(byteBuffer.remaining(), sh);
-
-            // allocate two byte array
-            allocateBytePair(byteP);
-        }
-        else{
-            byteBuffer.putShort(sh);
-            pointPos.Offset += Short.BYTES;
-        }
-    }
-
-    public void insertInteger(int i){
-        if(Integer.BYTES > byteBuffer.remaining()){
-            // split into 2 substring and insert into page respectively
-            Pair<byte[] , byte[]> byteP = splitIntegerToByte(byteBuffer.remaining(), i);
-
-            // allocate two byte array
-            allocateBytePair(byteP);
-        }
-        else{
-            byteBuffer.putInt(i);
-            pointPos.Offset += Integer.BYTES;
-        }
     }
 
     /**
@@ -169,21 +126,6 @@ public class SegmentInDiskManager {
         }
         return docIdList;
     }
-
-    public void nextDict(){
-        retrieveLocation(pointPos, SLOT_SIZE, pointPos);
-    }
-
-    public void nextDocIDList(int docIdListLeng){
-        retrieveLocation(docIDPos, docIdListLeng, docIDPos);
-    }
-
-
-
-    public boolean hasKeyWord(){
-        return !(pointPos.Page == docIDPos.Page && pointPos.Offset == docIDPos.Offset);
-    }
-
 
     /**
      *  ===== Page Utility =====
@@ -263,6 +205,49 @@ public class SegmentInDiskManager {
         return concat;
     }
 
+    public void insertString(String str){
+        if(str.length() > byteBuffer.remaining()){
+            // split into 2 substring and insert into page respectively
+            Pair<byte[] , byte[]> byteP = splitStringToByte(byteBuffer.remaining(), str);
+
+            // allocate two byte array
+            allocateBytePair(byteP);
+        }
+        else{
+            byte[] byteStr = str.getBytes();
+            byteBuffer.put(byteStr);
+            pointPos.Offset += str.length();
+        }
+    }
+
+    public void insertShort(short sh){
+        if(Short.BYTES > byteBuffer.remaining()){
+            // split into 2 substring and insert into page respectively
+            Pair<byte[] , byte[]> byteP = splitShortToByte(byteBuffer.remaining(), sh);
+
+            // allocate two byte array
+            allocateBytePair(byteP);
+        }
+        else{
+            byteBuffer.putShort(sh);
+            pointPos.Offset += Short.BYTES;
+        }
+    }
+
+    public void insertInteger(int i){
+        if(Integer.BYTES > byteBuffer.remaining()){
+            // split into 2 substring and insert into page respectively
+            Pair<byte[] , byte[]> byteP = splitIntegerToByte(byteBuffer.remaining(), i);
+
+            // allocate two byte array
+            allocateBytePair(byteP);
+        }
+        else{
+            byteBuffer.putInt(i);
+            pointPos.Offset += Integer.BYTES;
+        }
+    }
+
 
     // allocate byte pair and update point position
     public void allocateBytePair(Pair<byte[] , byte[]> byteP){
@@ -282,6 +267,7 @@ public class SegmentInDiskManager {
     }
 
 
+    // allocate the location where we start storing dictionary at the first four bytes of first page
     public void allocateDictStart(int totalLengthKeyword) {
         int totalLengthKeyWord = totalLengthKeyword + Integer.BYTES;
 
@@ -291,6 +277,7 @@ public class SegmentInDiskManager {
         pointPos.Offset += Integer.BYTES;
     }
 
+    // allocate number of keyword at the location where dictionary start
     public void allocateNumberOfKeyWord(int szKeyword) {
         // assign docID Position
         retrieveLocation(pointPos, Integer.BYTES + SLOT_SIZE*szKeyword, docIDPos);
@@ -306,6 +293,7 @@ public class SegmentInDiskManager {
         }
     }
 
+    // allocate the location where document ID list ends at the 5th~8th byte of first page
     public void allocateDocIDEnd(){
         byteBuffer =  pfc.readPage(0);  // not sure if we should clear
 
@@ -314,6 +302,17 @@ public class SegmentInDiskManager {
         byteBuffer.putShort(docIDPos.Offset);
         pfc.writePage(0, byteBuffer);
     }
+
+
+    public void nextDict(){
+        retrieveLocation(pointPos, SLOT_SIZE, pointPos);
+    }
+
+
+    public boolean hasKeyWord(){
+        return !(pointPos.Page == docIDPos.Page && pointPos.Offset == docIDPos.Offset);
+    }
+
 
     /**
      *
@@ -333,12 +332,4 @@ public class SegmentInDiskManager {
         pfc.close();
     }
 
-
-    public String toKeyword(int idx){
-        return "test";
-    }
-
-    public List<Integer> toDocList(int idx){
-        return new ArrayList<>();
-    }
 }
