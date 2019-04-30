@@ -15,7 +15,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class Team22FlushTest {
-    String folder = "./index/Team22FlushTest";
+    String folder = "./index/Team22FlushTest/";
 
     InvertedIndexManager indexManager;
     InvertedIndexSegmentForTest indexManagerTest;

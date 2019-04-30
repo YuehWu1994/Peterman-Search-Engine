@@ -505,7 +505,7 @@ public class InvertedIndexManager {
         Map<Integer, Document> documents = new HashMap<>();
 
         // ##### invertedLists  #####
-        SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(idxFolder + "/segment" + segmentNum));
+        SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(idxFolder + "segment" + segmentNum));
         segMgr.readInitiate();
 
         // create map(String, List<Integer>) to store keyword and dictionary pair, the list contain 4 attributes
@@ -533,7 +533,7 @@ public class InvertedIndexManager {
         }
 
         // documents
-        DocumentStore mapDB = MapdbDocStore.createOrOpen(idxFolder + "/Doc_Store" + segmentNum);
+        DocumentStore mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + segmentNum);
         Iterator<Map.Entry<Integer, Document>> it = mapDB.iterator();
         while(it.hasNext()){
             Map.Entry<Integer, Document> m = it.next();

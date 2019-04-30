@@ -18,7 +18,7 @@ import static org.junit.Assert.assertEquals;
 
 public class Team18FlushTest {
     public InvertedIndexManager manager;
-    String folderPath = "./index/Team18FlushTest";
+    String folderPath = "./index/Team18FlushTest/";
 
     @Before
     public void initialize(){
@@ -105,7 +105,7 @@ public class Team18FlushTest {
 
     @After
     public void clear(){
-        File dir = new File("./index/Team18FlushTest");
+        File dir = new File("./index/Team18FlushTest/");
         for (File file: dir.listFiles()){
             if (!file.isDirectory()){
                 file.delete();
