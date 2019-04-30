@@ -21,15 +21,11 @@ public class SegmentInDiskManager {
 
     PageFileChannel pfc;
     ByteBuffer byteBuffer;
-    static ByteBuffer refByteBuffer; // this byte buffer is used to read keyword or docId
+    ByteBuffer refByteBuffer; // this byte buffer is used to read keyword or docId
 
     public static int SLOT_SIZE = 16;
 
 
-    /*
-     * Define the location where we start storing dictionary
-     */
-    private static Location dictionaryStart;
 
     /*
      * Define the location where we point to docID, keyword
@@ -50,6 +46,7 @@ public class SegmentInDiskManager {
         pfc = PageFileChannel.createOrOpen(path);
 
         byteBuffer = ByteBuffer.allocate(pfc.PAGE_SIZE);
+        refByteBuffer = ByteBuffer.allocate(pfc.PAGE_SIZE);
 
         keyWordPos = new Location(0,Integer.BYTES); // no end of docID, start by (0, 4)
         pointPos = new Location(0,0);
