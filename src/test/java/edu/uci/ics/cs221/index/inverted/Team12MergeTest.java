@@ -12,9 +12,12 @@ import edu.uci.ics.cs221.analysis.ComposableAnalyzer;
 import edu.uci.ics.cs221.analysis.PorterStemmer;
 import edu.uci.ics.cs221.analysis.PunctuationTokenizer;
 import edu.uci.ics.cs221.storage.Document;
+import edu.uci.ics.cs221.index.inverted.InvertedIndexManager;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
 
 import java.io.File;
 
@@ -26,6 +29,11 @@ public class Team12MergeTest {
     Analyzer analyzer = new ComposableAnalyzer(tokenizer, porterStemmer);
 
     InvertedIndexManager iim;
+
+    int old_merge_threshold;
+    int old_flush_threshold;
+
+
 
     /**
      * This testcase verifies the below:
@@ -44,8 +52,10 @@ public class Team12MergeTest {
 
         iim.mergeAllSegments();
 
-        assert iim.getNumSegments() == 1;
+        int i = iim.getNumSegments();
+        assert iim.getNumSegments() == 2;
 
+        iim.DEFAULT_MERGE_THRESHOLD = old_merge_threshold;
     }
 
     /**
@@ -68,12 +78,18 @@ public class Team12MergeTest {
         iim.addDocument(new Document("In this project, the disk-based index structure is based on the idea of LSM"));
         iim.addDocument(new Document("Its main idea is the following"));
 
+
         assert iim.getNumSegments() == 2;
+
+        iim.DEFAULT_MERGE_THRESHOLD = old_merge_threshold;
+        iim.DEFAULT_FLUSH_THRESHOLD = old_flush_threshold;
     }
 
     @Before
     public void init() {
         iim = InvertedIndexManager.createOrOpen("./index/Team12MergeTest/", analyzer);
+        old_merge_threshold = iim.DEFAULT_MERGE_THRESHOLD;
+        old_flush_threshold = iim.DEFAULT_FLUSH_THRESHOLD;
         iim.DEFAULT_FLUSH_THRESHOLD = 1;
     }
 

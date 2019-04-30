@@ -15,13 +15,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.TreeMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.ArrayList;
 import java.io.File;
 
@@ -209,21 +203,26 @@ public class InvertedIndexManager {
         //throw new UnsupportedOperationException();
 
         String seg1 = "";
-        File p = new File(".");
-        String[] entries = p.list();
-        // assume to file is ordered !!!!!!!!!!!!!!!!!! not sure (naming problem)
-        for (int i = 0; i < entries.length; ++i) {
-            if(entries[i].length() > 7 && entries[i].substring(0,7).equals("segment")){
+        File p = new File(idxFolder);
+
+        List<String>  entries = Arrays.asList(p.list());
+        Collections.sort(entries);
+
+        for (int i = 0; i < entries.size(); ++i) {
+            if(entries.get(i).length() > 7 && entries.get(i).substring(0,7).equals("segment")){
                 if(seg1 != ""){
                     // merge
-                    merge(seg1, entries[i]);
+                    merge(seg1, entries.get(i));
 
                     // after merge
                     seg1 = "";
                 }
-                else seg1 = entries[i];
+                else seg1 = entries.get(i);
             }
         }
+
+        // minus NUM_SEQ by half
+        NUM_SEQ = NUM_SEQ/2;
     }
 
     public void merge(String seg1, String seg2){
@@ -246,7 +245,7 @@ public class InvertedIndexManager {
          * Specification of value at Map : segId(either 0,1) | page | offset | length  , stored at List of integer
          * If the keyword exist in both segments, the list would have two dictionary (8 attribute)
          */
-        Map<String, List<Integer>> mergedMap = new HashMap<>();
+        Map<String, List<Integer>> mergedMap = new TreeMap<>();
 
         SegmentInDiskManager segMgr1 = new SegmentInDiskManager(Paths.get(idxFolder + "segment" + id1));
         SegmentInDiskManager segMgr2 = new SegmentInDiskManager(Paths.get(idxFolder + "segment" + id2));
@@ -306,16 +305,19 @@ public class InvertedIndexManager {
                 l1.addAll(l2);
                 mergedMap.put(k1, l1);
                 has1 = false; has2 = false;
+                k1 = ""; k2 = "";
             }
             else if(k2.isEmpty() || (cmp < 0 && !k1.isEmpty() )){
                 totalLengthKeyword += k1.getBytes().length;
                 mergedMap.put(k1, l1);
                 has1 = false; has2 = true;
+                k1 = "";
             }
             else{
                 totalLengthKeyword += k2.getBytes().length;
                 mergedMap.put(k2, l2);
                 has1 = true; has2 = false;
+                k2 = "";
             }
         }
         return totalLengthKeyword;
@@ -481,7 +483,7 @@ public class InvertedIndexManager {
      */
     public int getNumSegments() {
         int cnt = 0;
-        File p = new File(idxFolder + "/");
+        File p = new File(idxFolder);
         String[] entries = p.list();
         //System.out.println(entries.length);
         for (int i = 0; i < entries.length; ++i) {
