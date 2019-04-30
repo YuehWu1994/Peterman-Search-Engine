@@ -21,7 +21,7 @@ public class SegmentInDiskManager {
 
     PageFileChannel pfc;
     ByteBuffer byteBuffer;
-    ByteBuffer refByteBuffer; // this byte buffer is used to read keyword or docId
+    static ByteBuffer refByteBuffer; // this byte buffer is used to read keyword or docId
 
     public static int SLOT_SIZE = 16;
 
@@ -100,7 +100,7 @@ public class SegmentInDiskManager {
         byteBuffer.position(pointPos.Offset);
 
         // set docIDPos
-        int szKeyword = readInt(byteBuffer, pointPos);
+        int szKeyword = readInt(byteBuffer, pointPos, true);
         retrieveLocation(pointPos, szKeyword*SLOT_SIZE, docIDPos);
         System.out.println("doc ID offset is: " + docIDPos.Offset);
 
@@ -110,15 +110,15 @@ public class SegmentInDiskManager {
     }
 
     public String readKeywordAndDict(List<Integer> dict){
-        short pg = readShort(byteBuffer, pointPos);
-        short offset = readShort(byteBuffer, pointPos);
-        int length = readInt(byteBuffer, pointPos);
+        short pg = readShort(byteBuffer, pointPos, true);
+        short offset = readShort(byteBuffer, pointPos, true);
+        int length = readInt(byteBuffer, pointPos, true);
 
-        String keyword = readString(length, refByteBuffer, keyWordPos);
+        String keyword = readString(length, refByteBuffer, keyWordPos, false);
 
-        short docPg = readShort(byteBuffer, pointPos);
-        short docOffset = readShort(byteBuffer, pointPos);
-        int docLength = readInt(byteBuffer, pointPos);
+        short docPg = readShort(byteBuffer, pointPos, true);
+        short docOffset = readShort(byteBuffer, pointPos, true);
+        int docLength = readInt(byteBuffer, pointPos, true);
 
         //System.out.println("pointPos is: (" +  pointPos.Page + "," + pointPos.Offset + ")");
         System.out.println("\n");
@@ -134,7 +134,7 @@ public class SegmentInDiskManager {
         List<Integer> docIdList = new ArrayList<>();
         int docSz = docIdLength/Integer.BYTES;
         for(int i = 0; i < docSz; ++i){
-            docIdList.add(readInt(byteBuffer, pointPos));
+            docIdList.add(readInt(byteBuffer, pointPos, true));
         }
         return docIdList;
     }
@@ -176,25 +176,43 @@ public class SegmentInDiskManager {
         return new Pair(byteA, byteB);
     }
 
-    public String readString(int len, ByteBuffer bb, Location lc){
+    public String readString(int len, ByteBuffer bb, Location lc, boolean pointToDict){
         System.out.print("Read string at (" + lc.Page + "," + lc.Offset + "), length is: " + len);
-        byte [] b = readByte(bb, lc, bb.remaining(), len);
+        byte [] b = new byte[len];
+        ByteBuffer newBb= readByte(bb, lc, pfc.PAGE_SIZE-lc.Offset, len, b);
+
+        // determine which byteBuffer we should assign to
+        if(pointToDict) byteBuffer = newBb;
+        else refByteBuffer = newBb;
+
         String str = new String(b);
         System.out.print(", value is: " + str + '\n');
         return str;
     }
 
-    public short readShort(ByteBuffer bb, Location lc){
+    public short readShort(ByteBuffer bb, Location lc, boolean pointToDict){
         System.out.print("Read short at (" + lc.Page + "," + lc.Offset + "), length is: 2");
-        byte [] b = readByte(bb, lc, byteBuffer.remaining(), Short.BYTES);
+        byte [] b = new byte[Short.BYTES];
+        ByteBuffer newBb= readByte(bb, lc, byteBuffer.remaining(), Short.BYTES, b);
+
+        // determine which byteBuffer we should assign to
+        if(pointToDict) byteBuffer = newBb;
+        else refByteBuffer = newBb;
+
         Short sh = ByteBuffer.wrap(b).getShort(); // https://stackoverflow.com/questions/7619058/convert-a-byte-array-to-integer-in-java-and-vice-versa
         System.out.print(", value is: " + sh + '\n');
         return sh;
     }
 
-    public int readInt(ByteBuffer bb, Location lc){
+    public int readInt(ByteBuffer bb, Location lc, boolean pointToDict){
         System.out.print("Read integer at (" + lc.Page + "," + lc.Offset + "), length is: 4");
-        byte [] b = readByte(bb, lc, byteBuffer.remaining(), Integer.BYTES);
+        byte [] b = new byte[Integer.BYTES];
+        ByteBuffer newBb= readByte(bb, lc, byteBuffer.remaining(), Integer.BYTES, b);
+
+        // determine which byteBuffer we should assign to
+        if(pointToDict) byteBuffer = newBb;
+        else refByteBuffer = newBb;
+
         int i = ByteBuffer.wrap(b).getInt();
         System.out.print(", value is: " + i + '\n');
         return i;
@@ -204,11 +222,11 @@ public class SegmentInDiskManager {
      *
      * @param disToEnd: distance(byte) from current pointing offset to end of page
      */
-    public byte[] readByte(ByteBuffer bb, Location lc, int disToEnd, int length){
-        byte [] concat = new byte[length];
+    public ByteBuffer readByte(ByteBuffer bb, Location lc, int disToEnd, int length, byte [] concat){
+        //byte [] concat = new byte[length];
 
         int p = 0;
-
+        bb.position(lc.Offset);
         for(int i = 0; i < Math.min(disToEnd, length); ++i) concat[p++] = bb.get();
 
         lc.Offset += Math.min(disToEnd, length);
@@ -217,7 +235,7 @@ public class SegmentInDiskManager {
         //System.out.println(length);
 
         // if the distance is enough to read all the bytes without reading from the next page, return byte array
-        if(disToEnd >= length) return concat;
+        if(disToEnd >= length) return bb;
 
 
         // new page
@@ -225,14 +243,15 @@ public class SegmentInDiskManager {
         lc.Offset = 0;
 
         bb.clear();
+        //bb = ByteBuffer.allocate(pfc.PAGE_SIZE);
         bb = pfc.readPage(lc.Page);
 
         for(int i = 0; i < length-disToEnd; ++i) concat[p++] = bb.get();
 
         // set lc offset
-        lc.Offset += length-disToEnd;
+        lc.Offset += (length-disToEnd);
 
-        return concat;
+        return bb;
     }
 
     public void insertString(String str){
@@ -245,26 +264,9 @@ public class SegmentInDiskManager {
             allocateBytePair(byteP);
         }
         else{
-//            char ch = '-';
-//            byte b1 = (byte) ch;      // explicit conversion from char to byte
-//            System.out.println(b1);
-//            System.out.println(byteBuffer.position());
-//            System.out.println(str.length());
             byte[] byteStr = str.getBytes();
-//            for(byte b : byteStr) System.out.println(b);
-//            System.out.println(byteStr.length);
             byteBuffer.put(byteStr);
-//            System.out.println(byteBuffer.position());
-            //pointPos.Offset += str.length();
             pointPos.Offset += byteStr.length;
-
-//            int len = str.length();
-//            byte [] byteStr2 = new byte[len];
-//            for(int i = 0; i < len; ++i) byteStr2[i] = (byte)str.charAt(i);
-//
-//            String k = new String(byteStr2);
-//            System.out.println(k);
-
         }
     }
 

@@ -519,6 +519,7 @@ public class InvertedIndexManager {
             documents.put(m.getKey(), m.getValue());
         }
 
+        mapDB.close();
         return new InvertedIndexSegmentForTest(invertedLists, documents);
     }
 
