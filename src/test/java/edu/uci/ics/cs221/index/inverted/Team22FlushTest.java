@@ -1,21 +1,26 @@
 package edu.uci.ics.cs221.index.inverted;
-
 import edu.uci.ics.cs221.analysis.*;
+import edu.uci.ics.cs221.index.inverted.InvertedIndexManager;
+import edu.uci.ics.cs221.index.inverted.InvertedIndexSegmentForTest;
+import edu.uci.ics.cs221.index.inverted.PageFileChannel;
 import edu.uci.ics.cs221.storage.Document;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.File;
+import javax.print.Doc;
 import java.nio.file.Files;
+import java.io.File;
 import java.nio.file.Paths;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.*;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class Team22FlushTest {
-    String folder = "./index/Team22FlushTest/";
+    String folder = "./index/Team22FlushTest";
 
     InvertedIndexManager indexManager;
     InvertedIndexSegmentForTest indexManagerTest;

@@ -1,16 +1,16 @@
 package edu.uci.ics.cs221.index.inverted;
 
-import edu.uci.ics.cs221.analysis.Analyzer;
-import edu.uci.ics.cs221.analysis.NaiveAnalyzer;
-import edu.uci.ics.cs221.storage.Document;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import edu.uci.ics.cs221.analysis.*;
+
+import edu.uci.ics.cs221.storage.*;
 
 import java.io.File;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.After;
+import java.util.Iterator;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;

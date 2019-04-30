@@ -1,7 +1,6 @@
 package edu.uci.ics.cs221.index.inverted;
 
-import edu.uci.ics.cs221.analysis.ComposableAnalyzer;
-import edu.uci.ics.cs221.analysis.PunctuationTokenizer;
+import edu.uci.ics.cs221.analysis.*;
 import edu.uci.ics.cs221.storage.Document;
 import org.junit.After;
 import org.junit.Before;

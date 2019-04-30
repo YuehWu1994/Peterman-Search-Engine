@@ -68,6 +68,7 @@ public class InvertedIndexManager {
 
     private static String idxFolder;
 
+    private static Analyzer iiAnalyzer;
 
     private InvertedIndexManager(String indexFolder, Analyzer analyzer) {
         document_Counter = 0;
@@ -79,11 +80,12 @@ public class InvertedIndexManager {
     public static InvertedIndexManager createOrOpen(String indexFolder, Analyzer analyzer) {
 
         try {
-            idxFolder = indexFolder;
+            idxFolder = indexFolder+"/";
             NUM_SEQ = 0;
             document_Counter = 0;
             totalLengthKeyword = 0;
             keyWordMap = new TreeMap<>();
+            iiAnalyzer = analyzer;
 
             Path indexFolderPath = Paths.get(indexFolder);
             if (Files.exists(indexFolderPath) && Files.isDirectory(indexFolderPath)) {
@@ -110,11 +112,8 @@ public class InvertedIndexManager {
     public void addDocument(Document document) {
 
         // process (analyzer) text in the document
-        PunctuationTokenizer tokenizer = new PunctuationTokenizer();
-        PorterStemmer porterStemmer = new PorterStemmer();
 
-        Analyzer analyzer = new ComposableAnalyzer(tokenizer, porterStemmer);
-        List<String> word = analyzer.analyze(document.getText());
+        List<String> word = iiAnalyzer.analyze(document.getText());
 
 
         // record on hashmap
@@ -501,6 +500,10 @@ public class InvertedIndexManager {
         Map<String, List<Integer>> invertedLists = new TreeMap<>();
         Map<Integer, Document> documents = new HashMap<>();
 
+        if(! Files.exists(Paths.get(idxFolder + "segment" + segmentNum)))
+        {
+            return null;
+        }
         // ##### invertedLists  #####
         SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(idxFolder + "segment" + segmentNum));
         segMgr.readInitiate();

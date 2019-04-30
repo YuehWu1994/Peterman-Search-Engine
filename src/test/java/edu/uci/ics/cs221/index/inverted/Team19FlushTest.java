@@ -1,20 +1,23 @@
 
 package edu.uci.ics.cs221.index.inverted;
 
-import edu.uci.ics.cs221.analysis.Analyzer;
 import edu.uci.ics.cs221.analysis.ComposableAnalyzer;
+import edu.uci.ics.cs221.analysis.PorterStemmer;
 import edu.uci.ics.cs221.analysis.PunctuationTokenizer;
-import edu.uci.ics.cs221.storage.Document;
+import edu.uci.ics.cs221.index.inverted.InvertedIndexManager;
+import edu.uci.ics.cs221.index.inverted.InvertedIndexSegmentForTest;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import static org.junit.Assert.assertEquals;
 
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 
-import static org.junit.Assert.assertEquals;
+import edu.uci.ics.cs221.analysis.Analyzer;
+import edu.uci.ics.cs221.storage.Document;
 
 public class Team19FlushTest {
 

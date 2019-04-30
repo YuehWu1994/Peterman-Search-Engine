@@ -3,15 +3,20 @@ package edu.uci.ics.cs221.index.inverted;
 import edu.uci.ics.cs221.analysis.ComposableAnalyzer;
 import edu.uci.ics.cs221.analysis.PorterStemmer;
 import edu.uci.ics.cs221.analysis.PunctuationTokenizer;
+import edu.uci.ics.cs221.index.inverted.InvertedIndexManager;
+import edu.uci.ics.cs221.index.inverted.InvertedIndexSegmentForTest;
 import edu.uci.ics.cs221.storage.Document;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Test;
 
-import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.io.File;
+
 
 import static org.junit.Assert.assertEquals;
 

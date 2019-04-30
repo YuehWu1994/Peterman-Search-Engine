@@ -1,24 +1,22 @@
 package edu.uci.ics.cs221.index.inverted;
 
-import edu.uci.ics.cs221.analysis.ComposableAnalyzer;
-import edu.uci.ics.cs221.analysis.PorterStemmer;
-import edu.uci.ics.cs221.analysis.PunctuationTokenizer;
+import edu.uci.ics.cs221.analysis.*;
+import edu.uci.ics.cs221.index.inverted.InvertedIndexManager;
+import edu.uci.ics.cs221.index.inverted.InvertedIndexSegmentForTest;
 import edu.uci.ics.cs221.storage.Document;
+import org.checkerframework.checker.units.qual.A;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static org.junit.Assert.assertEquals;
 
 public class Team18FlushTest {
     public InvertedIndexManager manager;
-    String folderPath = "./index/Team18FlushTest/";
+    String folderPath = "./index/Team18FlushTest";
 
     @Before
     public void initialize(){
@@ -105,7 +103,7 @@ public class Team18FlushTest {
 
     @After
     public void clear(){
-        File dir = new File("./index/Team18FlushTest/");
+        File dir = new File("./index/Team18FlushTest");
         for (File file: dir.listFiles()){
             if (!file.isDirectory()){
                 file.delete();
