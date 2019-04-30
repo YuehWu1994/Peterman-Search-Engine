@@ -50,24 +50,24 @@ public class InvertedIndexManager {
     /**
      * Map keyword with list of document ID
      */
-    private static Map<String, Set<Integer>> keyWordMap = new HashMap<>();
+    private static Map<String, Set<Integer>> keyWordMap;
 
 
     /**
      * Number of sequence in disk (for merge)
      */
-    private static int NUM_SEQ = 0; // @@@@ move this parameter to createoropen and get the value from list of file
+    private static int NUM_SEQ;
 
     /**
      * Document Counter (for flush)
      */
-    private static Integer document_Counter = 0;
+    private static Integer document_Counter;
 
 
     /**
      * Total length of keyword (in order to build dictionary on page file)
      */
-    private static Integer totalLengthKeyword = 0;
+    private static Integer totalLengthKeyword;
 
 
     private static String idxFolder;
@@ -84,6 +84,11 @@ public class InvertedIndexManager {
 
         try {
             idxFolder = indexFolder;
+            NUM_SEQ = 0;
+            document_Counter = 0;
+            totalLengthKeyword = 0;
+            keyWordMap = new HashMap<>();
+
             Path indexFolderPath = Paths.get(indexFolder);
             if (Files.exists(indexFolderPath) && Files.isDirectory(indexFolderPath)) {
                 if (Files.isDirectory(indexFolderPath)) {
@@ -127,7 +132,7 @@ public class InvertedIndexManager {
         }
 
         // add document into DocStore
-        DocumentStore mapDB = MapdbDocStore.createOrOpen(idxFolder + "/Doc_Store" + NUM_SEQ); // not sure
+        DocumentStore mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + NUM_SEQ); // not sure
         mapDB.addDocument(document_Counter, document);
         //System.out.println(mapDB.size());
         mapDB.close();
@@ -147,7 +152,8 @@ public class InvertedIndexManager {
         // throw new UnsupportedOperationException();
         if(document_Counter == 0) return;
 
-        SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(idxFolder + "/segment" + NUM_SEQ));
+
+        SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(idxFolder + "segment" + NUM_SEQ));
 
         // allocate the position on start point of keyword
         segMgr.allocateKeywordStart(totalLengthKeyword);
@@ -205,7 +211,7 @@ public class InvertedIndexManager {
         String[] entries = p.list();
         // assume to file is ordered !!!!!!!!!!!!!!!!!! not sure (naming problem)
         for (int i = 0; i < entries.length; ++i) {
-            if(entries[i].substring(0,7).equals("segment")){
+            if(entries[i].length() > 7 && entries[i].substring(0,7).equals("segment")){
                 if(seg1 != ""){
                     // merge
                     merge(seg1, entries[i]);
@@ -225,11 +231,11 @@ public class InvertedIndexManager {
         int id2 = Integer.parseInt(seg2.substring(7));
 
 
-        DocumentStore mapDB1 = MapdbDocStore.createOrOpen(idxFolder +  "/Doc_Store" + id1);
+        DocumentStore mapDB1 = MapdbDocStore.createOrOpen(idxFolder +  "Doc_Store" + id1);
         sz1 = (int)mapDB1.size();
 
 
-        DocumentStore mapDB2 = MapdbDocStore.createOrOpen(idxFolder +  "/Doc_Store" + id2);
+        DocumentStore mapDB2 = MapdbDocStore.createOrOpen(idxFolder +  "Doc_Store" + id2);
         sz2 = (int)mapDB2.size();
 
 
@@ -240,15 +246,15 @@ public class InvertedIndexManager {
          */
         Map<String, List<Integer>> mergedMap = new HashMap<>();
 
-        SegmentInDiskManager segMgr1 = new SegmentInDiskManager(Paths.get(idxFolder + "/segment" + id1));
-        SegmentInDiskManager segMgr2 = new SegmentInDiskManager(Paths.get(idxFolder + "/segment" + id2));
+        SegmentInDiskManager segMgr1 = new SegmentInDiskManager(Paths.get(idxFolder + "segment" + id1));
+        SegmentInDiskManager segMgr2 = new SegmentInDiskManager(Paths.get(idxFolder + "segment" + id2));
         segMgr1.readInitiate(); segMgr2.readInitiate();
 
 
         // read to fill the map
         int totalLengthKeyword = fillTheMap(mergedMap, segMgr1, segMgr2);
 
-        SegmentInDiskManager segMgrMerge = new SegmentInDiskManager(Paths.get(idxFolder + "/mergedSegment"));
+        SegmentInDiskManager segMgrMerge = new SegmentInDiskManager(Paths.get(idxFolder + "mergedSegment"));
 
         // insert to new segment
         insertAtMergedSegment(mergedMap, segMgr1, segMgr2, segMgrMerge, totalLengthKeyword, sz1);
@@ -371,25 +377,25 @@ public class InvertedIndexManager {
     public void deleteAndRename(int id1, int id2){
         // delete segment
         File f1, f2;
-        f1 = new File(idxFolder +"/segment" + id1);
-        f2 = new File(idxFolder +"/segment" + id2);
+        f1 = new File(idxFolder +"segment" + id1);
+        f2 = new File(idxFolder +"segment" + id2);
         f1.delete(); f2.delete();
 
         // rename segment
-        f1 = new File(idxFolder +"/mergedSegment");
-        f2 = new File(idxFolder +"/segment" + id1/2);
+        f1 = new File(idxFolder +"mergedSegment");
+        f2 = new File(idxFolder +"segment" + id1/2);
         boolean success = f1.renameTo(f2);
 
         if(!success) throw new UnsupportedOperationException("rename segment fail");
 
 
         // delete 2nd document store
-        f2 = new File(idxFolder + "/Doc_Store" + id2);
+        f2 = new File(idxFolder + "Doc_Store" + id2);
         f2.delete();
 
         // rename 1st document store
-        f1 = new File(idxFolder + "/Doc_Store" + id1);
-        f2 = new File(idxFolder + "/Doc_Store" + id1/2);
+        f1 = new File(idxFolder + "Doc_Store" + id1);
+        f2 = new File(idxFolder + "Doc_Store" + id1/2);
         success = f1.renameTo(f2);
 
         if(!success) throw new UnsupportedOperationException("rename docstore fail");
@@ -498,7 +504,6 @@ public class InvertedIndexManager {
             l1.add(0, 0);
             dictMap.put(k1, l1);
 
-            //segMgr.nextDict();
         }
 
         // read docId from segment and write to invertedLists
@@ -519,6 +524,7 @@ public class InvertedIndexManager {
             documents.put(m.getKey(), m.getValue());
         }
 
+        mapDB.close();
         return new InvertedIndexSegmentForTest(invertedLists, documents);
     }
 
