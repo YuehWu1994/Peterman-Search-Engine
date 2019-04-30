@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
+import java.util.TreeMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -87,7 +88,7 @@ public class InvertedIndexManager {
             NUM_SEQ = 0;
             document_Counter = 0;
             totalLengthKeyword = 0;
-            keyWordMap = new HashMap<>();
+            keyWordMap = new TreeMap<>();
 
             Path indexFolderPath = Paths.get(indexFolder);
             if (Files.exists(indexFolderPath) && Files.isDirectory(indexFolderPath)) {
@@ -485,7 +486,7 @@ public class InvertedIndexManager {
      */
     public InvertedIndexSegmentForTest getIndexSegment(int segmentNum) {
         //throw new UnsupportedOperationException();
-        Map<String, List<Integer>> invertedLists = new HashMap<>();
+        Map<String, List<Integer>> invertedLists = new TreeMap<>();
         Map<Integer, Document> documents = new HashMap<>();
 
         // ##### invertedLists  #####
@@ -493,7 +494,7 @@ public class InvertedIndexManager {
         segMgr.readInitiate();
 
         // create map(String, List<Integer>) to store keyword and dictionary pair, the list contain 4 attributes
-        Map<String, List<Integer>> dictMap = new HashMap<>();
+        Map<String, List<Integer>> dictMap = new TreeMap<>();
 
 
         // read keyword and dictionary from segment
