@@ -5,15 +5,15 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.nio.ByteBuffer;
 import java.util.List;
-import javafx.util.Pair;
-import java.util.Set;
 
+import javafx.util.Pair;
+
+import java.util.Set;
 
 
 /**
  * | key word | dictionary (4-byte keyword length + 12-byte 1 keyword slot) | docID list
  * |           key word   + dictionary                                      |
- *
  */
 
 
@@ -24,7 +24,6 @@ public class SegmentInDiskManager {
     ByteBuffer refByteBuffer; // this byte buffer is used to read keyword or docId
 
     public static int SLOT_SIZE = 16;
-
 
 
     /*
@@ -39,8 +38,6 @@ public class SegmentInDiskManager {
     private Location pointPos;
 
 
-
-
     SegmentInDiskManager(Path path) {
         System.out.println(path.toString());
         pfc = PageFileChannel.createOrOpen(path);
@@ -48,24 +45,26 @@ public class SegmentInDiskManager {
         byteBuffer = ByteBuffer.allocate(pfc.PAGE_SIZE);
         refByteBuffer = ByteBuffer.allocate(pfc.PAGE_SIZE);
 
-        keyWordPos = new Location(0,Integer.BYTES); // no end of docID, start by (0, 4)
-        pointPos = new Location(0,0);
-        docIDPos = new Location(0,0);
+        keyWordPos = new Location(0, Integer.BYTES); // no end of docID, start by (0, 4)
+        pointPos = new Location(0, 0);
+        docIDPos = new Location(0, 0);
     }
 
     /**
-     *  ===== INSERT =====
+     * ===== INSERT =====
      */
 
-    public void insertKeyWord(String str){
+    public void insertKeyWord(String str) {
         insertString(str);
-        assert (byteBuffer.position() == pointPos.Offset) : "pointer " + pointPos.Offset  + " and buffer position " + byteBuffer.position()+ " not match";
+        assert (byteBuffer.position() == pointPos.Offset) : "pointer " + pointPos.Offset + " and buffer position " + byteBuffer.position() + " not match";
     }
 
     /*
      * | keywordPage | keyword offset | keyword length | list page | list offset | list length
      */
-    public void insertMetaDataSlot(int keyLength, int valueLength){
+    public void insertMetaDataSlot(int keyLength, int valueLength)//int slotNum, int numberOfSlots, int keyLength, Set<Integer> lst)//int valueLength) {
+    {
+        //int valueLength = lst.size() * Integer.BYTES;
         insertShort(keyWordPos.Page);
         insertShort(keyWordPos.Offset);
         insertInteger(keyLength);
@@ -75,19 +74,33 @@ public class SegmentInDiskManager {
         insertShort(docIDPos.Offset);
         insertInteger(valueLength);
         retrieveLocation(docIDPos, valueLength, docIDPos);
-        assert (byteBuffer.position() == pointPos.Offset) : "pointer " + pointPos.Offset  + " and buffer position " + byteBuffer.position()+ " not match";
+        assert (byteBuffer.position() == pointPos.Offset) : "pointer " + pointPos.Offset + " and buffer position " + byteBuffer.position() + " not match";
         System.out.println("\n");
+        /*pointPos.Offset+= (numberOfSlots - slotNum) * 16;
+        if(pointPos.Offset >= pfc.PAGE_SIZE)
+        {
+            pointPos.Page++;
+            pointPos.Offset = (short)(pointPos.Offset % pfc.PAGE_SIZE);
+        }
+        insertListOfDocID(lst);
+        pointPos.Offset-= (numberOfSlots - slotNum + 1) * 16;
+        if(pointPos.Offset < -1)
+        {
+            pointPos.Page--;
+            pointPos.Offset = (short)(pfc.PAGE_SIZE - pointPos.Offset);
+        }
+         */
     }
 
-    public void insertListOfDocID(Set<Integer> lst){
-        for(Integer i : lst) insertInteger(i);
-        assert (byteBuffer.position() == pointPos.Offset) : "pointer " + pointPos.Offset  + " and buffer position " + byteBuffer.position()+ " not match";
+    public void insertListOfDocID(Set<Integer> lst) {
+        for (Integer i : lst) insertInteger(i);
+        assert (byteBuffer.position() == pointPos.Offset) : "pointer " + pointPos.Offset + " and buffer position " + byteBuffer.position() + " not match";
     }
 
     /**
-     *  ===== READ =====
+     * ===== READ =====
      */
-    public void readInitiate(){
+    public void readInitiate() {
         // set pointPos
         byteBuffer = pfc.readPage(0);
         pointPos.Page = byteBuffer.getShort();
@@ -99,7 +112,7 @@ public class SegmentInDiskManager {
 
         // set docIDPos
         int szKeyword = readInt(byteBuffer, pointPos, true);
-        retrieveLocation(pointPos, szKeyword*SLOT_SIZE, docIDPos);
+        retrieveLocation(pointPos, szKeyword * SLOT_SIZE, docIDPos);
         System.out.println("doc ID offset is: " + docIDPos.Offset);
 
         // set refByteBuffer
@@ -107,7 +120,7 @@ public class SegmentInDiskManager {
         refByteBuffer.position(4);
     }
 
-    public String readKeywordAndDict(List<Integer> dict){
+    public String readKeywordAndDict(List<Integer> dict) {
         short pg = readShort(byteBuffer, pointPos, true);
         short offset = readShort(byteBuffer, pointPos, true);
         int length = readInt(byteBuffer, pointPos, true);
@@ -121,66 +134,66 @@ public class SegmentInDiskManager {
         //System.out.println("pointPos is: (" +  pointPos.Page + "," + pointPos.Offset + ")");
         System.out.println("\n");
 
-        dict.add((int)docPg);
-        dict.add((int)docOffset);
+        dict.add((int) docPg);
+        dict.add((int) docOffset);
         dict.add(docLength);
 
         return keyword;
     }
 
-    public List<Integer> readDocIdList(int docIdLength){
+    public List<Integer> readDocIdList(int docIdLength) {
         List<Integer> docIdList = new ArrayList<>();
-        int docSz = docIdLength/Integer.BYTES;
-        for(int i = 0; i < docSz; ++i){
+        int docSz = docIdLength / Integer.BYTES;
+        for (int i = 0; i < docSz; ++i) {
             docIdList.add(readInt(byteBuffer, pointPos, true));
         }
         return docIdList;
     }
 
     /**
-     *  ===== Page Utility =====
+     * ===== Page Utility =====
      */
-    public Pair<byte[] , byte[]>  splitShortToByte(int pivot, short sh){
+    public Pair<byte[], byte[]> splitShortToByte(int pivot, short sh) {
         byte[] bytes = ByteBuffer.allocate(Integer.BYTES).putInt(sh).array();
         byte[] byteA = new byte[pivot];
-        byte[] byteB = new byte[Integer.BYTES-pivot];
+        byte[] byteB = new byte[Integer.BYTES - pivot];
 
-        for(int it = 0; it < pivot; ++it)  byteA[it] = bytes[it];
-        for(int it = pivot; it < Short.BYTES; ++it) byteB[it-pivot] = bytes[it];
+        for (int it = 0; it < pivot; ++it) byteA[it] = bytes[it];
+        for (int it = pivot; it < Short.BYTES; ++it) byteB[it - pivot] = bytes[it];
 
         return new Pair(byteA, byteB);
     }
 
-    public Pair<byte[] , byte[]>  splitIntegerToByte(int pivot, int i){
+    public Pair<byte[], byte[]> splitIntegerToByte(int pivot, int i) {
         byte[] bytes = ByteBuffer.allocate(Integer.BYTES).putInt(i).array();
         byte[] byteA = new byte[pivot];
-        byte[] byteB = new byte[Integer.BYTES-pivot];
+        byte[] byteB = new byte[Integer.BYTES - pivot];
 
-        for(int it = 0; it < pivot; ++it)  byteA[it] = bytes[it];
-        for(int it = pivot; it < Integer.BYTES; ++it) byteB[it-pivot] = bytes[it];
+        for (int it = 0; it < pivot; ++it) byteA[it] = bytes[it];
+        for (int it = pivot; it < Integer.BYTES; ++it) byteB[it - pivot] = bytes[it];
 
         return new Pair(byteA, byteB);
     }
 
-    public Pair<byte[], byte[]> splitStringToByte(int pivot, String str){
+    public Pair<byte[], byte[]> splitStringToByte(int pivot, String str) {
 
         byte[] byteStr = str.getBytes();
         byte[] byteA = new byte[pivot];
-        byte[] byteB = new byte[byteStr.length-pivot];
+        byte[] byteB = new byte[byteStr.length - pivot];
 
-        for(int i = 0; i < pivot; ++i) byteA[i] = byteStr[i];
-        for(int i = 0; i < byteStr.length-pivot; ++i) byteB[i] = byteStr[i+pivot];
+        for (int i = 0; i < pivot; ++i) byteA[i] = byteStr[i];
+        for (int i = 0; i < byteStr.length - pivot; ++i) byteB[i] = byteStr[i + pivot];
 
         return new Pair(byteA, byteB);
     }
 
-    public String readString(int len, ByteBuffer bb, Location lc, boolean pointToDict){
+    public String readString(int len, ByteBuffer bb, Location lc, boolean pointToDict) {
         System.out.print("Read string at (" + lc.Page + "," + lc.Offset + "), length is: " + len);
-        byte [] b = new byte[len];
-        ByteBuffer newBb= readByte(bb, lc, pfc.PAGE_SIZE-lc.Offset, len, b);
+        byte[] b = new byte[len];
+        ByteBuffer newBb = readByte(bb, lc, pfc.PAGE_SIZE - lc.Offset, len, b);
 
         // determine which byteBuffer we should assign to
-        if(pointToDict) byteBuffer = newBb;
+        if (pointToDict) byteBuffer = newBb;
         else refByteBuffer = newBb;
 
         String str = new String(b);
@@ -188,13 +201,13 @@ public class SegmentInDiskManager {
         return str;
     }
 
-    public short readShort(ByteBuffer bb, Location lc, boolean pointToDict){
+    public short readShort(ByteBuffer bb, Location lc, boolean pointToDict) {
         System.out.print("Read short at (" + lc.Page + "," + lc.Offset + "), length is: 2");
-        byte [] b = new byte[Short.BYTES];
-        ByteBuffer newBb= readByte(bb, lc, byteBuffer.remaining(), Short.BYTES, b);
+        byte[] b = new byte[Short.BYTES];
+        ByteBuffer newBb = readByte(bb, lc, byteBuffer.remaining(), Short.BYTES, b);
 
         // determine which byteBuffer we should assign to
-        if(pointToDict) byteBuffer = newBb;
+        if (pointToDict) byteBuffer = newBb;
         else refByteBuffer = newBb;
 
         Short sh = ByteBuffer.wrap(b).getShort(); // https://stackoverflow.com/questions/7619058/convert-a-byte-array-to-integer-in-java-and-vice-versa
@@ -202,13 +215,13 @@ public class SegmentInDiskManager {
         return sh;
     }
 
-    public int readInt(ByteBuffer bb, Location lc, boolean pointToDict){
+    public int readInt(ByteBuffer bb, Location lc, boolean pointToDict) {
         System.out.print("Read integer at (" + lc.Page + "," + lc.Offset + "), length is: 4");
-        byte [] b = new byte[Integer.BYTES];
-        ByteBuffer newBb= readByte(bb, lc, byteBuffer.remaining(), Integer.BYTES, b);
+        byte[] b = new byte[Integer.BYTES];
+        ByteBuffer newBb = readByte(bb, lc, byteBuffer.remaining(), Integer.BYTES, b);
 
         // determine which byteBuffer we should assign to
-        if(pointToDict) byteBuffer = newBb;
+        if (pointToDict) byteBuffer = newBb;
         else refByteBuffer = newBb;
 
         int i = ByteBuffer.wrap(b).getInt();
@@ -217,15 +230,14 @@ public class SegmentInDiskManager {
     }
 
     /**
-     *
      * @param disToEnd: distance(byte) from current pointing offset to end of page
      */
-    public ByteBuffer readByte(ByteBuffer bb, Location lc, int disToEnd, int length, byte [] concat){
+    public ByteBuffer readByte(ByteBuffer bb, Location lc, int disToEnd, int length, byte[] concat) {
         //byte [] concat = new byte[length];
 
         int p = 0;
         bb.position(lc.Offset);
-        for(int i = 0; i < Math.min(disToEnd, length); ++i) concat[p++] = bb.get();
+        for (int i = 0; i < Math.min(disToEnd, length); ++i) concat[p++] = bb.get();
 
         lc.Offset += Math.min(disToEnd, length);
 
@@ -233,7 +245,7 @@ public class SegmentInDiskManager {
         //System.out.println(length);
 
         // if the distance is enough to read all the bytes without reading from the next page, return byte array
-        if(disToEnd >= length) return bb;
+        if (disToEnd >= length) return bb;
 
 
         // new page
@@ -244,55 +256,52 @@ public class SegmentInDiskManager {
         //bb = ByteBuffer.allocate(pfc.PAGE_SIZE);
         bb = pfc.readPage(lc.Page);
 
-        for(int i = 0; i < length-disToEnd; ++i) concat[p++] = bb.get();
+        for (int i = 0; i < length - disToEnd; ++i) concat[p++] = bb.get();
 
         // set lc offset
-        lc.Offset += (length-disToEnd);
+        lc.Offset += (length - disToEnd);
 
         return bb;
     }
 
-    public void insertString(String str){
+    public void insertString(String str) {
         System.out.println("Insert string " + str + " at (" + pointPos.Page + "," + pointPos.Offset + "), length is: " + str.getBytes().length);
-        if(str.getBytes().length > byteBuffer.remaining()){
+        if (str.getBytes().length > byteBuffer.remaining()) {
             // split into 2 substring and insert into page respectively
-            Pair<byte[] , byte[]> byteP = splitStringToByte(byteBuffer.remaining(), str);
+            Pair<byte[], byte[]> byteP = splitStringToByte(byteBuffer.remaining(), str);
 
             // allocate two byte array
             allocateBytePair(byteP);
-        }
-        else{
+        } else {
             byte[] byteStr = str.getBytes();
             byteBuffer.put(byteStr);
             pointPos.Offset += byteStr.length;
         }
     }
 
-    public void insertShort(short sh){
+    public void insertShort(short sh) {
         System.out.println("Insert short " + sh + " at (" + pointPos.Page + "," + pointPos.Offset + "), length is: 2");
-        if(Short.BYTES > byteBuffer.remaining()){
+        if (Short.BYTES > byteBuffer.remaining()) {
             // split into 2 substring and insert into page respectively
-            Pair<byte[] , byte[]> byteP = splitShortToByte(byteBuffer.remaining(), sh);
+            Pair<byte[], byte[]> byteP = splitShortToByte(byteBuffer.remaining(), sh);
 
             // allocate two byte array
             allocateBytePair(byteP);
-        }
-        else{
+        } else {
             byteBuffer.putShort(sh);
             pointPos.Offset += Short.BYTES;
         }
     }
 
-    public void insertInteger(int i){
+    public void insertInteger(int i) {
         System.out.println("Insert integer " + i + " at (" + pointPos.Page + "," + pointPos.Offset + "), length is: 4");
-        if(Integer.BYTES > byteBuffer.remaining()){
+        if (Integer.BYTES > byteBuffer.remaining()) {
             // split into 2 substring and insert into page respectively
-            Pair<byte[] , byte[]> byteP = splitIntegerToByte(byteBuffer.remaining(), i);
+            Pair<byte[], byte[]> byteP = splitIntegerToByte(byteBuffer.remaining(), i);
 
             // allocate two byte array
             allocateBytePair(byteP);
-        }
-        else{
+        } else {
             byteBuffer.putInt(i);
             pointPos.Offset += Integer.BYTES;
         }
@@ -300,7 +309,7 @@ public class SegmentInDiskManager {
 
 
     // allocate byte pair and update point position
-    public void allocateBytePair(Pair<byte[] , byte[]> byteP){
+    public void allocateBytePair(Pair<byte[], byte[]> byteP) {
         byteBuffer.put(byteP.getKey());
 
         // append page and update point position
@@ -321,71 +330,50 @@ public class SegmentInDiskManager {
     public void allocateKeywordStart(int totalLengthKeyword) {
         int totalLengthKeyWord = totalLengthKeyword + Integer.BYTES;
 
-        byteBuffer.putShort((short)(totalLengthKeyWord/pfc.PAGE_SIZE));
-        byteBuffer.putShort((short)(totalLengthKeyWord%pfc.PAGE_SIZE));
+        byteBuffer.putShort((short) (totalLengthKeyWord / pfc.PAGE_SIZE));
+        byteBuffer.putShort((short) (totalLengthKeyWord % pfc.PAGE_SIZE));
 
 
         pointPos.Offset += Integer.BYTES;
-        System.out.println("====== Keyword initial position is: " +  pointPos.Page + ' ' + pointPos.Offset + " ====== " );
+        System.out.println("====== Keyword initial position is: " + pointPos.Page + ' ' + pointPos.Offset + " ====== ");
     }
 
     // allocate number of keyword at the location where dictionary start
     public void allocateNumberOfKeyWord(int szKeyword) {
-        System.out.println("====== Dictionary initial position is: " +  pointPos.Page + ' ' + pointPos.Offset+ " ====== " );
+        System.out.println("====== Dictionary initial position is: " + pointPos.Page + ' ' + pointPos.Offset + " ====== ");
+
+        insertInteger(szKeyword);
 
         // assign docID Position
-        retrieveLocation(pointPos, Integer.BYTES + SLOT_SIZE*szKeyword, docIDPos);
+        retrieveLocation(pointPos, Integer.BYTES + SLOT_SIZE * szKeyword, docIDPos);
 
-        System.out.println("====== Doc Id initial position is: " +  docIDPos.Page + ' ' + docIDPos.Offset+ " ====== " );
+        System.out.println("====== Doc Id initial position is: " + docIDPos.Page + ' ' + docIDPos.Offset + " ====== ");
 
-
-        if(Integer.BYTES > byteBuffer.remaining()){
-            Pair<byte[] , byte[]> byteP = splitIntegerToByte(byteBuffer.remaining(), szKeyword);
-            allocateBytePair(byteP);
-        }
-        else{
-            byteBuffer.putInt(szKeyword);
-            pointPos.Offset += Integer.BYTES;
-        }
     }
 
-//    // allocate the location where document ID list ends at the 5th~8th byte of first page
-//    public void allocateDocIDEnd(){
-//        byteBuffer =  pfc.readPage(0);  // not sure if we should clear
-//
-//        byteBuffer.position(Integer.BYTES);
-//        byteBuffer.putShort(docIDPos.Page);
-//        byteBuffer.putShort(docIDPos.Offset);
-//        pfc.writePage(0, byteBuffer);
-//    }
-
-
-
-
-    public boolean hasKeyWord(){
+    public boolean hasKeyWord() {
         return !(pointPos.Page == docIDPos.Page && pointPos.Offset == docIDPos.Offset);
     }
 
 
     /**
-     *
-     * @param loc: original location
+     * @param loc:   original location
      * @param shift: shift by how many bytes
      * @return retrieved location
      */
-    public void retrieveLocation(Location loc, int shift, Location loc2){
+    public void retrieveLocation(Location loc, int shift, Location loc2) {
         // transfer to byte-oriented distance instead of using page
         long dis = loc.Page * pfc.PAGE_SIZE + loc.Offset + shift;
 
-        loc2.Page = (short) (dis/pfc.PAGE_SIZE);
-        loc2.Offset = (short) (dis%pfc.PAGE_SIZE);
+        loc2.Page = (short) (dis / pfc.PAGE_SIZE);
+        loc2.Offset = (short) (dis % pfc.PAGE_SIZE);
     }
 
-    public void appendPage(){
+    public void appendPage() {
         pfc.appendPage(byteBuffer);
     }
 
-    public void close(){
+    public void close() {
         pfc.close();
     }
 
