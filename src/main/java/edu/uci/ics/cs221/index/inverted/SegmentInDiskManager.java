@@ -71,12 +71,12 @@ public class SegmentInDiskManager {
         insertShort(keyWordPos.Page);
         insertShort(keyWordPos.Offset);
         insertInteger(keyLength);
-        retrieveLocation(keyWordPos, keyLength, keyWordPos); // not sure
+        retrieveLocation(keyWordPos, keyLength, keyWordPos);
 
         insertShort(docIDPos.Page);
         insertShort(docIDPos.Offset);
         insertInteger(valueLength);
-        retrieveLocation(docIDPos, valueLength, docIDPos); // not sure
+        retrieveLocation(docIDPos, valueLength, docIDPos);
         assert (byteBuffer.position() == pointPos.Offset) : "pointer " + pointPos.Offset  + " and buffer position " + byteBuffer.position()+ " not match";
         System.out.println("\n");
     }
@@ -102,9 +102,11 @@ public class SegmentInDiskManager {
         // set docIDPos
         int szKeyword = readInt(byteBuffer, pointPos);
         retrieveLocation(pointPos, szKeyword*SLOT_SIZE, docIDPos);
+        System.out.println("doc ID offset is: " + docIDPos.Offset);
 
         // set refByteBuffer
         refByteBuffer = pfc.readPage(0);
+        refByteBuffer.position(4);
     }
 
     public String readKeywordAndDict(List<Integer> dict){
@@ -117,6 +119,9 @@ public class SegmentInDiskManager {
         short docPg = readShort(byteBuffer, pointPos);
         short docOffset = readShort(byteBuffer, pointPos);
         int docLength = readInt(byteBuffer, pointPos);
+
+        //System.out.println("pointPos is: (" +  pointPos.Page + "," + pointPos.Offset + ")");
+        System.out.println("\n");
 
         dict.add((int)docPg);
         dict.add((int)docOffset);
@@ -172,19 +177,27 @@ public class SegmentInDiskManager {
     }
 
     public String readString(int len, ByteBuffer bb, Location lc){
+        System.out.print("Read string at (" + lc.Page + "," + lc.Offset + "), length is: " + len);
         byte [] b = readByte(bb, lc, bb.remaining(), len);
-        return new String(b);
+        String str = new String(b);
+        System.out.print(", value is: " + str + '\n');
+        return str;
     }
 
     public short readShort(ByteBuffer bb, Location lc){
+        System.out.print("Read short at (" + lc.Page + "," + lc.Offset + "), length is: 2");
         byte [] b = readByte(bb, lc, byteBuffer.remaining(), Short.BYTES);
-        return ByteBuffer.wrap(b).getShort(); // https://stackoverflow.com/questions/7619058/convert-a-byte-array-to-integer-in-java-and-vice-versa
-
+        Short sh = ByteBuffer.wrap(b).getShort(); // https://stackoverflow.com/questions/7619058/convert-a-byte-array-to-integer-in-java-and-vice-versa
+        System.out.print(", value is: " + sh + '\n');
+        return sh;
     }
 
     public int readInt(ByteBuffer bb, Location lc){
+        System.out.print("Read integer at (" + lc.Page + "," + lc.Offset + "), length is: 4");
         byte [] b = readByte(bb, lc, byteBuffer.remaining(), Integer.BYTES);
-        return ByteBuffer.wrap(b).getInt();
+        int i = ByteBuffer.wrap(b).getInt();
+        System.out.print(", value is: " + i + '\n');
+        return i;
     }
 
     /**
@@ -200,8 +213,12 @@ public class SegmentInDiskManager {
 
         lc.Offset += Math.min(disToEnd, length);
 
+        //System.out.println(disToEnd);
+        //System.out.println(length);
+
         // if the distance is enough to read all the bytes without reading from the next page, return byte array
         if(disToEnd >= length) return concat;
+
 
         // new page
         lc.Page += 1;
@@ -211,6 +228,9 @@ public class SegmentInDiskManager {
         bb = pfc.readPage(lc.Page);
 
         for(int i = 0; i < length-disToEnd; ++i) concat[p++] = bb.get();
+
+        // set lc offset
+        lc.Offset += length-disToEnd;
 
         return concat;
     }
@@ -340,9 +360,6 @@ public class SegmentInDiskManager {
 //    }
 
 
-    public void nextDict(){
-        retrieveLocation(pointPos, SLOT_SIZE, pointPos);
-    }
 
 
     public boolean hasKeyWord(){
@@ -362,6 +379,10 @@ public class SegmentInDiskManager {
 
         loc2.Page = (short) (dis/pfc.PAGE_SIZE);
         loc2.Offset = (short) (dis%pfc.PAGE_SIZE);
+    }
+
+    public void appendPage(){
+        pfc.appendPage(byteBuffer);
     }
 
     public void close(){
