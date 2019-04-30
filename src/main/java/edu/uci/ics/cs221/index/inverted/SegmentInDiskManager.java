@@ -46,6 +46,7 @@ public class SegmentInDiskManager {
 
 
     SegmentInDiskManager(Path path) {
+        System.out.println(path.toString());
         pfc = PageFileChannel.createOrOpen(path);
 
         byteBuffer = ByteBuffer.allocate(pfc.PAGE_SIZE);
