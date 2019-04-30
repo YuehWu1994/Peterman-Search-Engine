@@ -1,21 +1,24 @@
-package edu.uci.ics.cs221.index.Team12MergeSearchTest;
+
+
+//check forceful merge
+//check content of segment if it has both lists
+//stop merge in middle of execution and see if merged segment has some content
+
+package edu.uci.ics.cs221.index.inverted;
 
 
 import edu.uci.ics.cs221.analysis.Analyzer;
 import edu.uci.ics.cs221.analysis.ComposableAnalyzer;
 import edu.uci.ics.cs221.analysis.PorterStemmer;
 import edu.uci.ics.cs221.analysis.PunctuationTokenizer;
-import edu.uci.ics.cs221.index.inverted.InvertedIndexManager;
 import edu.uci.ics.cs221.storage.Document;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-
 import java.io.File;
 
-public class Team12MergeSearchTest {
+public class Team12MergeTest {
 
     PunctuationTokenizer tokenizer = new PunctuationTokenizer();
     PorterStemmer porterStemmer = new PorterStemmer();
@@ -24,19 +27,36 @@ public class Team12MergeSearchTest {
 
     InvertedIndexManager iim;
 
-    /*
-        At this test case, we verify:
-
-        1. We check whether the final number of segment equals to 2. The steps are illustrated as follow:
-            add doc1, doc2, doc3, doc4 -> total 4 seqments, merge to 2 segments
-            add doc5, doc6 -> total 4 seqments, merge to 2 segments
-            add doc7, doc8 -> total 4 seqments, merge to 2 segments
-
+    /**
+     * This testcase verifies the below:
+     * that we can forcefully merge the segments
+     * even before the number of segments reaches the threshold
+     * threshold is not changed set to default 8
      */
-
-
     @Test
-    public void Test1() {
+    public void test1()
+    {
+
+        iim.addDocument(new Document("Implement LSM-like disk-based inverted index that supports insertions"));
+        iim.addDocument(new Document("Implement merge of inverted index segments"));
+        iim.addDocument(new Document("Implement keyword search, boolean AND search, and boolean OR search"));
+        iim.addDocument(new Document("(Optional Extra Credit): Implement deletions"));
+
+        iim.mergeAllSegments();
+
+        assert iim.getNumSegments() == 1;
+
+    }
+
+    /**
+     * At this test case, we verify:
+     * 1. We check whether the final number of segment equals to 2. The steps are illustrated as follow:
+     * add doc1, doc2, doc3, doc4 -> total 4 seqments, merge to 2 segments
+     * add doc5, doc6 -> total 4 seqments, merge to 2 segments
+     * add doc7, doc8 -> total 4 seqments, merge to 2 segments
+     */
+    @Test
+    public void Test2() {
         iim.DEFAULT_MERGE_THRESHOLD = 4;
 
         iim.addDocument(new Document("In this project"));
@@ -53,13 +73,13 @@ public class Team12MergeSearchTest {
 
     @Before
     public void init() {
-        iim = InvertedIndexManager.createOrOpen("index", analyzer);
+        iim = InvertedIndexManager.createOrOpen("./index/Team12MergeTest/", analyzer);
         iim.DEFAULT_FLUSH_THRESHOLD = 1;
     }
 
     @After
     public void cleanup() {
-        File p = new File("index");
+        File p = new File("./index/Team12MergeTest/");
         String[] entries = p.list();
         for (int i = 0; i < entries.length; ++i) {
             File currentFile = new File(p.getPath(), entries[i]);

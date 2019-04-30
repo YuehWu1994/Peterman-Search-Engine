@@ -10,9 +10,6 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-
-import java.util.List;
-
 import static java.nio.file.StandardOpenOption.READ;
 import static java.nio.file.StandardOpenOption.WRITE;
 
@@ -35,9 +32,6 @@ import static java.nio.file.StandardOpenOption.WRITE;
  * ```
  *
  */
-
-
-
 public class PageFileChannel implements AutoCloseable {
 
     /**
@@ -53,9 +47,6 @@ public class PageFileChannel implements AutoCloseable {
      */
     public static int readCounter = 0;
     public static int writeCounter = 0;
-
-
-
 
     private FileChannel fileChannel;
 
@@ -109,7 +100,7 @@ public class PageFileChannel implements AutoCloseable {
         int numPages = this.getNumPages();
         ByteBuffer buffer = ByteBuffer.allocate(numPages * PAGE_SIZE);
         for (int i = 0; i < numPages; i++) {
-            buffer.put(readPage(i).array(), i * PAGE_SIZE, PAGE_SIZE);
+            buffer.put(readPage(i).array());
         }
         return buffer;
     }
@@ -145,8 +136,6 @@ public class PageFileChannel implements AutoCloseable {
      * Appends all bytes in the byte buffer to the end of the file.
      *
      * @param byteBuffer byteBuffer with arbitrary long size
-     *
-     * maintain counter
      */
     public void appendAllBytes(ByteBuffer byteBuffer) {
         for (int i = 0; i < byteBuffer.capacity(); i += PAGE_SIZE) {
@@ -181,7 +170,6 @@ public class PageFileChannel implements AutoCloseable {
             throw new UncheckedIOException(e);
         }
     }
-
 
     /**
      * Resets read/write counters, for testing purposes.

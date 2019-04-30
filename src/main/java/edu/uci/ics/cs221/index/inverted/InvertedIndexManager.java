@@ -1,6 +1,7 @@
 package edu.uci.ics.cs221.index.inverted;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Iterators;
 import edu.uci.ics.cs221.analysis.Analyzer;
 import edu.uci.ics.cs221.analysis.ComposableAnalyzer;
 import edu.uci.ics.cs221.analysis.PorterStemmer;
@@ -445,7 +446,21 @@ public class InvertedIndexManager {
      * Iterates through all the documents in all disk segments.
      */
     public Iterator<Document> documentIterator() {
-        throw new UnsupportedOperationException();
+        Iterator<Document> iterator = new ArrayList<Document>().iterator();
+        File p = new File(idxFolder + "/");
+        String[] entries = p.list();
+        for (int i = 0; i < entries.length; ++i)
+        {
+            if(entries[i].length() > 9 && entries[i].substring(0,9).equals("Doc_Store"))
+            {
+                DocumentStore mapDB = MapdbDocStore.createOrOpen("Doc_Store" + i);
+                iterator = Iterators.concat(Iterators.transform(mapDB.iterator(), entry -> entry.getValue()), iterator);
+                //iterator = Iterators.transform(mapDB.iterator(), entry -> entry.getValue());
+                mapDB.close();
+            }
+
+        }
+        return iterator;
     }
 
     /**
