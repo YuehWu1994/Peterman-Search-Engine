@@ -62,9 +62,8 @@ public class SegmentInDiskManager {
     /*
      * | keywordPage | keyword offset | keyword length | list page | list offset | list length
      */
-    public void insertMetaDataSlot(int keyLength, int valueLength)//int slotNum, int numberOfSlots, int keyLength, Set<Integer> lst)//int valueLength) {
+    public void insertMetaDataSlot(int keyLength, int valueLength)
     {
-        //int valueLength = lst.size() * Integer.BYTES;
         insertShort(keyWordPos.Page);
         insertShort(keyWordPos.Offset);
         insertInteger(keyLength);
@@ -76,20 +75,6 @@ public class SegmentInDiskManager {
         retrieveLocation(docIDPos, valueLength, docIDPos);
         assert (byteBuffer.position() == pointPos.Offset) : "pointer " + pointPos.Offset + " and buffer position " + byteBuffer.position() + " not match";
         System.out.println("\n");
-        /*pointPos.Offset+= (numberOfSlots - slotNum) * 16;
-        if(pointPos.Offset >= pfc.PAGE_SIZE)
-        {
-            pointPos.Page++;
-            pointPos.Offset = (short)(pointPos.Offset % pfc.PAGE_SIZE);
-        }
-        insertListOfDocID(lst);
-        pointPos.Offset-= (numberOfSlots - slotNum + 1) * 16;
-        if(pointPos.Offset < -1)
-        {
-            pointPos.Page--;
-            pointPos.Offset = (short)(pfc.PAGE_SIZE - pointPos.Offset);
-        }
-         */
     }
 
     public void insertListOfDocID(Set<Integer> lst) {
@@ -131,7 +116,6 @@ public class SegmentInDiskManager {
         short docOffset = readShort(byteBuffer, pointPos, true);
         int docLength = readInt(byteBuffer, pointPos, true);
 
-        //System.out.println("pointPos is: (" +  pointPos.Page + "," + pointPos.Offset + ")");
         System.out.println("\n");
 
         dict.add((int) docPg);
@@ -141,11 +125,12 @@ public class SegmentInDiskManager {
         return keyword;
     }
 
-    public List<Integer> readDocIdList(int docIdLength) {
+    public List<Integer> readDocIdList(int pageNum, int listOffset, int docIdLength) {
         List<Integer> docIdList = new ArrayList<>();
         int docSz = docIdLength / Integer.BYTES;
+        Location loc = new Location(pageNum, listOffset);
         for (int i = 0; i < docSz; ++i) {
-            docIdList.add(readInt(byteBuffer, pointPos, true));
+            docIdList.add(readInt(byteBuffer, loc, true));
         }
         return docIdList;
     }
@@ -216,6 +201,11 @@ public class SegmentInDiskManager {
     }
 
     public int readInt(ByteBuffer bb, Location lc, boolean pointToDict) {
+        if(pointPos.Page != lc.Page)
+        {
+            bb = pfc.readPage(lc.Page);
+        }
+        //implement equals location
         System.out.print("Read integer at (" + lc.Page + "," + lc.Offset + "), length is: 4");
         byte[] b = new byte[Integer.BYTES];
         ByteBuffer newBb = readByte(bb, lc, byteBuffer.remaining(), Integer.BYTES, b);
@@ -241,9 +231,6 @@ public class SegmentInDiskManager {
 
         lc.Offset += Math.min(disToEnd, length);
 
-        //System.out.println(disToEnd);
-        //System.out.println(length);
-
         // if the distance is enough to read all the bytes without reading from the next page, return byte array
         if (disToEnd >= length) return bb;
 
@@ -253,7 +240,6 @@ public class SegmentInDiskManager {
         lc.Offset = 0;
 
         bb.clear();
-        //bb = ByteBuffer.allocate(pfc.PAGE_SIZE);
         bb = pfc.readPage(lc.Page);
 
         for (int i = 0; i < length - disToEnd; ++i) concat[p++] = bb.get();

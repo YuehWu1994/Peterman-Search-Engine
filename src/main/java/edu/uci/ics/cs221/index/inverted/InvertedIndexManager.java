@@ -2,6 +2,7 @@ package edu.uci.ics.cs221.index.inverted;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterators;
+import com.google.common.collect.Lists;
 import edu.uci.ics.cs221.analysis.Analyzer;
 import edu.uci.ics.cs221.analysis.ComposableAnalyzer;
 import edu.uci.ics.cs221.analysis.PorterStemmer;
@@ -19,6 +20,8 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.ArrayList;
 import java.io.File;
+
+import static com.google.common.collect.Maps.immutableEntry;
 
 
 /**
@@ -149,8 +152,7 @@ public class InvertedIndexManager {
      * flush() writes the segment to disk containing the posting list and the corresponding document store.
      */
     public void flush() {
-        if (document_Counter == 0)
-        {
+        if (document_Counter == 0) {
             return;
         }
 
@@ -171,10 +173,8 @@ public class InvertedIndexManager {
         segMgr.allocateNumberOfKeyWord(keyWordMap.size());
 
         System.out.println("##### Start to insert dictionary slot #####");
-        //int keyWordNum = 0;
         for (Map.Entry<String, Set<Integer>> entry : keyWordMap.entrySet()) {
-            segMgr.insertMetaDataSlot(entry.getKey().getBytes().length, entry.getValue().size() * Integer.BYTES);//keyWordNum, keyWordMap.size(), entry.getKey().getBytes().length, entry.getValue());//.size() * Integer.BYTES);
-            //keyWordNum++;
+            segMgr.insertMetaDataSlot(entry.getKey().getBytes().length, entry.getValue().size() * Integer.BYTES);
         }
 
         System.out.println("##### Start to insert docID #####");
@@ -205,24 +205,21 @@ public class InvertedIndexManager {
     public void mergeAllSegments() {
         // merge only happens at even number of segments
         Preconditions.checkArgument(getNumSegments() % 2 == 0);
-        //throw new UnsupportedOperationException();
 
         String seg1 = "";
-        File p = new File(idxFolder);
 
-        List<String> entries = Arrays.asList(p.list());
-        Collections.sort(entries);
+        File dir = new File(idxFolder);
+        File[] files = dir.listFiles((d, name) -> name.startsWith("segment"));
 
-        for (int i = 0; i < entries.size(); ++i) {
-            if (entries.get(i).length() > 7 && entries.get(i).substring(0, 7).equals("segment")) {
-                if (seg1 != "") {
-                    // merge
-                    merge(seg1, entries.get(i));
+        Arrays.sort(files);
+        for (int i = 0; i < files.length; ++i) {
+            if (seg1 != "") {
+                // merge
+                merge(seg1, files[i].getName());
 
-                    // after merge
-                    seg1 = "";
-                } else seg1 = entries.get(i);
-            }
+                // after merge
+                seg1 = "";
+            } else seg1 = files[i].getName();
         }
 
         // minus NUM_SEQ by half
@@ -277,12 +274,10 @@ public class InvertedIndexManager {
         mapDB1.close();
         mapDB2.close();
 
-
         // close
         segMgr1.close();
         segMgr2.close();
         segMgrMerge.close();
-
 
         deleteAndRename(id1, id2);
     }
@@ -311,7 +306,8 @@ public class InvertedIndexManager {
                 totalLengthKeyword += k1.getBytes().length;
                 l1.addAll(l2);
                 mergedMap.put(k1, new ArrayList<>(l1));
-                l1.clear(); l2.clear();
+                l1.clear();
+                l2.clear();
                 has1 = false;
                 has2 = false;
                 k1 = "";
@@ -333,8 +329,6 @@ public class InvertedIndexManager {
                 k2 = "";
             }
         }
-
-
 
         return totalLengthKeyword;
     }
@@ -372,17 +366,17 @@ public class InvertedIndexManager {
 
             // the keyword exist in both segments
             if (v.size() == 8) {
-                docIdList1 = segMgr1.readDocIdList(v.get(3));
-                docIdList2 = segMgr2.readDocIdList(v.get(7));
+                docIdList1 = segMgr1.readDocIdList(v.get(1), v.get(2), v.get(3));
+                docIdList2 = segMgr2.readDocIdList(v.get(5), v.get(6), v.get(7));
             } else {
                 // exist in either  1st/2nd segment
-                if (v.get(0) == 0) docIdList1 = segMgr1.readDocIdList(v.get(3));
-                else docIdList2 = segMgr2.readDocIdList(v.get(3));
+                if (v.get(0) == 0) docIdList1 = segMgr1.readDocIdList(v.get(1), v.get(2), v.get(3));
+                else docIdList2 = segMgr2.readDocIdList(v.get(1), v.get(2), v.get(3));
             }
 
             // convert docId in segment 2
 
-            for (int i = 0; i < docIdList2.size(); ++i){
+            for (int i = 0; i < docIdList2.size(); ++i) {
                 int id_v = docIdList2.get(i);
                 id_v += sz1;
                 docIdList2.set(i, id_v);
@@ -394,8 +388,6 @@ public class InvertedIndexManager {
             segMgrMerge.insertListOfDocID(new HashSet<>(docIdList1));
         }
 
-
-        //segMgrMerge.allocateDocIDEnd();
     }
 
     public void deleteAndRename(int id1, int id2) {
@@ -437,8 +429,39 @@ public class InvertedIndexManager {
      */
     public Iterator<Document> searchQuery(String keyword) {
         Preconditions.checkNotNull(keyword);
-
-        throw new UnsupportedOperationException();
+        Iterator<Document> iterator = new ArrayList<Document>().iterator();
+        if (keyword.equals("")) {
+            return iterator;
+        }
+        File dir = new File(idxFolder);
+        File[] files = dir.listFiles((d, name) -> name.startsWith("segment"));
+        for (int i = 0; i < files.length; ++i) {
+            SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(files[i].getPath()));
+            segMgr.readInitiate();
+            Map<String, List<Integer>> dictMap = new TreeMap<>();
+            while (segMgr.hasKeyWord()) {
+                List<Integer> l1 = new ArrayList<>();
+                String k1 = segMgr.readKeywordAndDict(l1);
+                dictMap.put(k1, l1);
+            }
+            int pos = Collections.binarySearch(Lists.newArrayList(dictMap.keySet()), keyword);
+            if (pos < 0) {
+                return iterator;
+            }
+            List<Integer> postingListMetaData = dictMap.get(keyword);
+            List<Integer> postingList = segMgr.readDocIdList(postingListMetaData.get(0),
+                    postingListMetaData.get(1), postingListMetaData.get(2));
+            int segmentNumPos = files[i].getName().indexOf("segment");
+            segmentNumPos += 7;
+            if (segmentNumPos >= 7) {
+                DocumentStore mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" +
+                        files[i].getName().substring(segmentNumPos));
+                Iterators.removeIf(mapDB.iterator(), entry -> !postingList.contains(entry.getKey()));
+                iterator = Iterators.concat(iterator, Iterators.transform(mapDB.iterator(), entry -> entry.getValue()));
+                mapDB.close();
+            }
+        }
+        return iterator;
     }
 
     /**
@@ -449,7 +472,7 @@ public class InvertedIndexManager {
      */
     public Iterator<Document> searchAndQuery(List<String> keywords) {
         Preconditions.checkNotNull(keywords);
-
+        //while doing binary search, try minimizing disk IO by checking the other keywords if they are also in the list
         throw new UnsupportedOperationException();
     }
 
@@ -474,9 +497,9 @@ public class InvertedIndexManager {
         File dir = new File(idxFolder);
         File[] files = dir.listFiles((d, name) -> name.startsWith("Doc_Store"));
         for (int i = 0; i < files.length; ++i) {
-                DocumentStore mapDB = MapdbDocStore.createOrOpen(  files[i].getPath());
-                iterator = Iterators.concat(iterator, Iterators.transform(mapDB.iterator(), entry -> entry.getValue()));
-                mapDB.close();
+            DocumentStore mapDB = MapdbDocStore.createOrOpen(files[i].getPath());
+            iterator = Iterators.concat(iterator, Iterators.transform(mapDB.iterator(), entry -> entry.getValue()));
+            mapDB.close();
         }
         return iterator;
     }
@@ -517,8 +540,7 @@ public class InvertedIndexManager {
         Map<Integer, Document> documents = new HashMap<>();
 
 
-        if(! Files.exists(Paths.get(idxFolder + "segment" + segmentNum)))
-        {
+        if (!Files.exists(Paths.get(idxFolder + "segment" + segmentNum))) {
             return null;
         }
 
@@ -533,23 +555,21 @@ public class InvertedIndexManager {
         while (segMgr.hasKeyWord()) {
             List<Integer> l1 = new ArrayList<>();
             String k1 = segMgr.readKeywordAndDict(l1);
-
-            l1.add(0, 0);
             dictMap.put(k1, l1);
-
         }
 
         // read docId from segment and write to invertedLists
         for (Map.Entry<String, List<Integer>> entry : dictMap.entrySet()) {
             List<Integer> v = entry.getValue();
 
-            List<Integer> docIdList1 = segMgr.readDocIdList(v.get(3));
+            List<Integer> docIdList1 = segMgr.readDocIdList(v.get(0), v.get(1), v.get(2));
 
             invertedLists.put(entry.getKey(), docIdList1);
 
         }
 
         // documents
+        //todo change to convert iterator instead of loopiing through all elements
         DocumentStore mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + segmentNum);
         Iterator<Map.Entry<Integer, Document>> it = mapDB.iterator();
         while (it.hasNext()) {
