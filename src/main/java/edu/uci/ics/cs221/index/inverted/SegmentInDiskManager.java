@@ -345,7 +345,8 @@ public class SegmentInDiskManager {
         insertInteger(szKeyword);
 
         // assign docID Position
-        retrieveLocation(pointPos, Integer.BYTES + SLOT_SIZE * szKeyword, docIDPos);
+
+        retrieveLocation(pointPos,  SLOT_SIZE * szKeyword, docIDPos);
 
         System.out.println("====== Doc Id initial position is: " + docIDPos.Page + ' ' + docIDPos.Offset + " ====== ");
 

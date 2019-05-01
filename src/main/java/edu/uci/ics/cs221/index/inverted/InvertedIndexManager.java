@@ -9,6 +9,7 @@ import edu.uci.ics.cs221.analysis.PunctuationTokenizer;
 import edu.uci.ics.cs221.storage.DocumentStore;
 import edu.uci.ics.cs221.storage.MapdbDocStore;
 import edu.uci.ics.cs221.storage.Document;
+import org.omg.PortableInterceptor.SYSTEM_EXCEPTION;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -80,7 +81,8 @@ public class InvertedIndexManager {
     public static InvertedIndexManager createOrOpen(String indexFolder, Analyzer analyzer) {
 
         try {
-            idxFolder = indexFolder+"/";
+
+            idxFolder = indexFolder + "/";
             NUM_SEQ = 0;
             document_Counter = 0;
             totalLengthKeyword = 0;
@@ -112,7 +114,6 @@ public class InvertedIndexManager {
     public void addDocument(Document document) {
 
         // process (analyzer) text in the document
-
         List<String> word = iiAnalyzer.analyze(document.getText());
 
 
@@ -124,6 +125,7 @@ public class InvertedIndexManager {
             }
 
             keyWordMap.get(w).add(document_Counter);
+
         }
 
         // add document into DocStore
@@ -263,9 +265,13 @@ public class InvertedIndexManager {
         // insert to new segment
         insertAtMergedSegment(mergedMap, segMgr1, segMgr2, segMgrMerge, totalLengthKeyword, sz1);
 
+
+        // append last page
+        segMgrMerge.appendPage();
+
         // add documentStore at doc1 toward doc0
         for (int i = 0; i < sz2; ++i) {
-            Document d = mapDB2.getDocument(0);
+            Document d = mapDB2.getDocument(i);
             mapDB1.addDocument(i + sz1, d);
         }
         mapDB1.close();
@@ -288,16 +294,14 @@ public class InvertedIndexManager {
         String k1 = "", k2 = "";
         boolean has1 = false, has2 = false;
         List<Integer> l1 = new ArrayList<>(), l2 = new ArrayList<>();
-        while (segMgr1.hasKeyWord() || segMgr2.hasKeyWord()) {
 
-
+        while (!k1.isEmpty() || !k2.isEmpty() || segMgr1.hasKeyWord() || segMgr2.hasKeyWord()) {
             if (!has1 && segMgr1.hasKeyWord()) {
-                l1.clear();
                 k1 = segMgr1.readKeywordAndDict(l1);
                 l1.add(0, 0);
             }
             if (!has2 && segMgr2.hasKeyWord()) {
-                l2.clear();
+
                 k2 = segMgr2.readKeywordAndDict(l2);
                 l2.add(0, 1);
             }
@@ -306,25 +310,32 @@ public class InvertedIndexManager {
             if (cmp == 0) {
                 totalLengthKeyword += k1.getBytes().length;
                 l1.addAll(l2);
-                mergedMap.put(k1, l1);
+                mergedMap.put(k1, new ArrayList<>(l1));
+                l1.clear(); l2.clear();
                 has1 = false;
                 has2 = false;
                 k1 = "";
                 k2 = "";
             } else if (k2.isEmpty() || (cmp < 0 && !k1.isEmpty())) {
                 totalLengthKeyword += k1.getBytes().length;
-                mergedMap.put(k1, l1);
+                mergedMap.put(k1, new ArrayList<>(l1));
+                l1.clear();
                 has1 = false;
                 has2 = true;
                 k1 = "";
             } else {
                 totalLengthKeyword += k2.getBytes().length;
-                mergedMap.put(k2, l2);
+
+                mergedMap.put(k2, new ArrayList<>(l2));
+                l2.clear();
                 has1 = true;
                 has2 = false;
                 k2 = "";
             }
         }
+
+
+
         return totalLengthKeyword;
     }
 
@@ -370,7 +381,12 @@ public class InvertedIndexManager {
             }
 
             // convert docId in segment 2
-            for (int i : docIdList2) i += sz1;
+
+            for (int i = 0; i < docIdList2.size(); ++i){
+                int id_v = docIdList2.get(i);
+                id_v += sz1;
+                docIdList2.set(i, id_v);
+            }
 
             // concat docId2 to docId1
             docIdList1.addAll(docIdList2);
@@ -500,10 +516,12 @@ public class InvertedIndexManager {
         Map<String, List<Integer>> invertedLists = new TreeMap<>();
         Map<Integer, Document> documents = new HashMap<>();
 
+
         if(! Files.exists(Paths.get(idxFolder + "segment" + segmentNum)))
         {
             return null;
         }
+
         // ##### invertedLists  #####
         SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(idxFolder + "segment" + segmentNum));
         segMgr.readInitiate();
