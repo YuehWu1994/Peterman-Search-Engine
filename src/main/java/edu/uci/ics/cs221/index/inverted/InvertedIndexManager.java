@@ -4,13 +4,9 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import edu.uci.ics.cs221.analysis.Analyzer;
-import edu.uci.ics.cs221.analysis.ComposableAnalyzer;
-import edu.uci.ics.cs221.analysis.PorterStemmer;
-import edu.uci.ics.cs221.analysis.PunctuationTokenizer;
 import edu.uci.ics.cs221.storage.DocumentStore;
 import edu.uci.ics.cs221.storage.MapdbDocStore;
 import edu.uci.ics.cs221.storage.Document;
-import org.omg.PortableInterceptor.SYSTEM_EXCEPTION;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -20,9 +16,6 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.ArrayList;
 import java.io.File;
-
-import static com.google.common.collect.Maps.immutableEntry;
-
 
 /**
  * This class manages an disk-based inverted index and all the documents in the inverted index.
@@ -73,6 +66,11 @@ public class InvertedIndexManager {
     private static String idxFolder;
 
     private static Analyzer iiAnalyzer;
+
+    private enum SearchOperation {
+        AND_SEARCH,
+        OR_SEARCH
+    }
 
     private InvertedIndexManager(String indexFolder, Analyzer analyzer) {
         document_Counter = 0;
@@ -192,12 +190,6 @@ public class InvertedIndexManager {
         System.out.println("\n\n");
     }
 
-    public void reset() {
-        ++NUM_SEQ;
-        keyWordMap.clear();
-        document_Counter = 0;
-        totalLengthKeyword = 0;
-    }
 
     /**
      * Merges all the disk segments of the inverted index pair-wise.
@@ -208,8 +200,7 @@ public class InvertedIndexManager {
 
         String seg1 = "";
 
-        File dir = new File(idxFolder);
-        File[] files = dir.listFiles((d, name) -> name.startsWith("segment"));
+        File[] files = getFiles("segment");
 
         Arrays.sort(files);
         for (int i = 0; i < files.length; ++i) {
@@ -226,7 +217,156 @@ public class InvertedIndexManager {
         NUM_SEQ = NUM_SEQ / 2;
     }
 
-    public void merge(String seg1, String seg2) {
+
+    /**
+     * Performs a single keyword search on the inverted index.
+     * You could assume the analyzer won't convert the keyword into multiple tokens.
+     * If the keyword is empty, it should not return anything.
+     *
+     * @param keyword keyword, cannot be null.
+     * @return a iterator of documents matching the query
+     */
+    public Iterator<Document> searchQuery(String keyword) {
+        Preconditions.checkNotNull(keyword);
+        List<Document> iterator = new ArrayList<>();
+        if (keyword.equals("")) {
+            return iterator.iterator();
+        }
+
+        return searchKewords(iiAnalyzer.analyze(keyword), SearchOperation.AND_SEARCH);
+    }
+
+    /**
+     * Performs an AND boolean search on the inverted index.
+     *
+     * @param keywords a list of keywords in the AND query
+     * @return a iterator of documents matching the query
+     */
+    public Iterator<Document> searchAndQuery(List<String> keywords) {
+        Preconditions.checkNotNull(keywords);
+        List<Document> iterator = new ArrayList<>();
+        if (keywords.isEmpty() || keywords.contains("")) {
+            return iterator.iterator();
+        }
+        Set<String> words = new LinkedHashSet<>();
+        for (int i = 0; i < keywords.size(); i++) {
+            words.addAll(iiAnalyzer.analyze(keywords.get(i)));
+        }
+        return searchKewords(Lists.newArrayList(words), SearchOperation.AND_SEARCH);
+    }
+
+    /**
+     * Performs an OR boolean search on the inverted index.
+     *
+     * @param keywords a list of keywords in the OR query
+     * @return a iterator of documents matching the query
+     */
+    public Iterator<Document> searchOrQuery(List<String> keywords) {
+        Preconditions.checkNotNull(keywords);
+        List<Document> iterator = new ArrayList<>();
+        if (keywords.isEmpty()) {
+            return iterator.iterator();
+        }
+        Set<String> words = new LinkedHashSet<>();
+        for (int i = 0; i < keywords.size(); i++) {
+            words.addAll(iiAnalyzer.analyze(keywords.get(i)));
+        }
+        return searchKewords(Lists.newArrayList(words), SearchOperation.OR_SEARCH);
+    }
+
+    /**
+     * Iterates through all the documents in all disk segments.
+     */
+    public Iterator<Document> documentIterator() {
+        Iterator<Document> iterator = new ArrayList<Document>().iterator();
+
+        File[] files = getFiles("Doc_Store");
+        for (int i = 0; i < files.length; ++i) {
+            DocumentStore mapDB = MapdbDocStore.createOrOpenReadOnly(files[i].getPath());
+            iterator = Iterators.concat(iterator, Iterators.transform(mapDB.iterator(), entry -> entry.getValue()));
+            mapDB.close();
+        }
+        return iterator;
+    }
+
+    /**
+     * Deletes all documents in all disk segments of the inverted index that match the query.
+     *
+     * @param keyword
+     */
+    public void deleteDocuments(String keyword) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Gets the total number of segments in the inverted index.
+     * This function is used for checking correctness in test cases.
+     *
+     * @return number of index segments.
+     * <p>
+     * Q: used in disk or in-memory
+     */
+    public int getNumSegments() {
+        return getFiles("segment").length;
+    }
+
+    /**
+     * Reads a disk segment into memory based on segmentNum.
+     * This function is mainly used for checking correctness in test cases.
+     *
+     * @param segmentNum n-th segment in the inverted index (start from 0).
+     * @return in-memory data structure with all contents in the index segment, null if segmentNum don't exist.
+     * Q: used in disk or in-memory
+     */
+    public InvertedIndexSegmentForTest getIndexSegment(int segmentNum) {
+        Map<String, List<Integer>> invertedLists = new TreeMap<>();
+        Map<Integer, Document> documents = new HashMap<>();
+
+
+        if (!Files.exists(Paths.get(idxFolder + "segment" + segmentNum))) {
+            return null;
+        }
+
+        // ##### invertedLists  #####
+        SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(idxFolder + "segment" + segmentNum));
+        segMgr.readInitiate();
+
+        // create map(String, List<Integer>) to store keyword and dictionary pair, the list contain 4 attributes
+        Map<String, List<Integer>> dictMap = new TreeMap<>();
+
+        // read keyword and dictionary from segment
+        while (segMgr.hasKeyWord()) {
+            List<Integer> l1 = new ArrayList<>();
+            String k1 = segMgr.readKeywordAndDict(l1);
+            dictMap.put(k1, l1);
+        }
+
+        // read docId from segment and write to invertedLists
+        for (Map.Entry<String, List<Integer>> entry : dictMap.entrySet()) {
+            List<Integer> v = entry.getValue();
+
+            List<Integer> docIdList1 = segMgr.readDocIdList(v.get(0), v.get(1), v.get(2));
+
+            invertedLists.put(entry.getKey(), docIdList1);
+
+        }
+
+        // documents
+        DocumentStore mapDB = MapdbDocStore.createOrOpenReadOnly(idxFolder + "Doc_Store" + segmentNum);
+        Iterator<Map.Entry<Integer, Document>> it = mapDB.iterator();
+        while (it.hasNext()) {
+            Map.Entry<Integer, Document> m = it.next();
+            documents.put(m.getKey(), m.getValue());
+        }
+
+        mapDB.close();
+        return new InvertedIndexSegmentForTest(invertedLists, documents);
+    }
+
+    /**
+     * ================HELPER FUNCTIONS==================
+     */
+    private void merge(String seg1, String seg2) {
         // get segment id and docId size
         int sz1, sz2;
         int id1 = Integer.parseInt(seg1.substring(7));
@@ -283,7 +423,7 @@ public class InvertedIndexManager {
     }
 
     // Specification of value at Map : segId(either 0,1) | page | offset | length  , stored at List of integer
-    public int fillTheMap(Map<String, List<Integer>> mergedMap, SegmentInDiskManager segMgr1, SegmentInDiskManager segMgr2) {
+    private int fillTheMap(Map<String, List<Integer>> mergedMap, SegmentInDiskManager segMgr1, SegmentInDiskManager segMgr2) {
         int totalLengthKeyword = 0;
 
         String k1 = "", k2 = "";
@@ -333,8 +473,7 @@ public class InvertedIndexManager {
         return totalLengthKeyword;
     }
 
-
-    public void insertAtMergedSegment(Map<String, List<Integer>> mergedMap, SegmentInDiskManager segMgr1, SegmentInDiskManager segMgr2, SegmentInDiskManager segMgrMerge, int totalLengthKeyword, int sz1) {
+    private void insertAtMergedSegment(Map<String, List<Integer>> mergedMap, SegmentInDiskManager segMgr1, SegmentInDiskManager segMgr2, SegmentInDiskManager segMgrMerge, int totalLengthKeyword, int sz1) {
         // allocate the position on start point of keyword
         segMgrMerge.allocateKeywordStart(totalLengthKeyword);
 
@@ -390,7 +529,7 @@ public class InvertedIndexManager {
 
     }
 
-    public void deleteAndRename(int id1, int id2) {
+    private void deleteAndRename(int id1, int id2) {
         // delete segment
         File f1, f2;
         f1 = new File(idxFolder + "segment" + id1);
@@ -418,168 +557,53 @@ public class InvertedIndexManager {
         if (!success) throw new UnsupportedOperationException("rename docstore fail");
     }
 
+    private void reset() {
+        ++NUM_SEQ;
+        keyWordMap.clear();
+        document_Counter = 0;
+        totalLengthKeyword = 0;
+    }
 
-    /**
-     * Performs a single keyword search on the inverted index.
-     * You could assume the analyzer won't convert the keyword into multiple tokens.
-     * If the keyword is empty, it should not return anything.
-     *
-     * @param keyword keyword, cannot be null.
-     * @return a iterator of documents matching the query
-     */
-    public Iterator<Document> searchQuery(String keyword) {
-        Preconditions.checkNotNull(keyword);
-        Iterator<Document> iterator = new ArrayList<Document>().iterator();
-        if (keyword.equals("")) {
-            return iterator;
-        }
+    private File[] getFiles(String fileName) {
         File dir = new File(idxFolder);
-        File[] files = dir.listFiles((d, name) -> name.startsWith("segment"));
+        File[] files = dir.listFiles((d, name) -> name.startsWith(fileName));
+        return files;
+
+    }
+
+    private Iterator<Document> searchKewords(List<String> keywords, Enum searchOperation) {
+        Iterator<Document> iterator = new ArrayList<Document>().iterator();
+        File[] files = getFiles("segment");
+        Arrays.sort(files);
         for (int i = 0; i < files.length; ++i) {
             SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(files[i].getPath()));
             segMgr.readInitiate();
             Map<String, List<Integer>> dictMap = new TreeMap<>();
+            Set<Integer> postingListset = new LinkedHashSet<>();
             while (segMgr.hasKeyWord()) {
                 List<Integer> l1 = new ArrayList<>();
                 String k1 = segMgr.readKeywordAndDict(l1);
                 dictMap.put(k1, l1);
             }
-            int pos = Collections.binarySearch(Lists.newArrayList(dictMap.keySet()), keyword);
-            if (pos < 0) {
-                return iterator;
+            for (int j = 0; j < keywords.size(); j++) {
+                int pos = Collections.binarySearch(Lists.newArrayList(dictMap.keySet()), keywords.get(j));
+                if (pos >= 0) {
+                    List<Integer> postingList = segMgr.readDocIdList(dictMap.get(keywords.get(j)).get(0),
+                            dictMap.get(keywords.get(j)).get(1), dictMap.get(keywords.get(j)).get(2));
+                    if (searchOperation == SearchOperation.AND_SEARCH && j > 0) {
+                        postingListset.retainAll(postingList);
+                    } else {
+                        postingListset.addAll(postingList);
+                    }
+                }
             }
-            List<Integer> postingListMetaData = dictMap.get(keyword);
-            List<Integer> postingList = segMgr.readDocIdList(postingListMetaData.get(0),
-                    postingListMetaData.get(1), postingListMetaData.get(2));
-            int segmentNumPos = files[i].getName().indexOf("segment");
-            segmentNumPos += 7;
-            if (segmentNumPos >= 7) {
-                DocumentStore mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" +
-                        files[i].getName().substring(segmentNumPos));
-                Iterators.removeIf(mapDB.iterator(), entry -> !postingList.contains(entry.getKey()));
+            if (postingListset.size() >= 1) {
+                DocumentStore mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + i);
+                Iterators.removeIf(mapDB.iterator(), entry -> !postingListset.contains(entry.getKey()));
                 iterator = Iterators.concat(iterator, Iterators.transform(mapDB.iterator(), entry -> entry.getValue()));
                 mapDB.close();
             }
         }
         return iterator;
     }
-
-    /**
-     * Performs an AND boolean search on the inverted index.
-     *
-     * @param keywords a list of keywords in the AND query
-     * @return a iterator of documents matching the query
-     */
-    public Iterator<Document> searchAndQuery(List<String> keywords) {
-        Preconditions.checkNotNull(keywords);
-        //while doing binary search, try minimizing disk IO by checking the other keywords if they are also in the list
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Performs an OR boolean search on the inverted index.
-     *
-     * @param keywords a list of keywords in the OR query
-     * @return a iterator of documents matching the query
-     */
-    public Iterator<Document> searchOrQuery(List<String> keywords) {
-        Preconditions.checkNotNull(keywords);
-
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Iterates through all the documents in all disk segments.
-     */
-    public Iterator<Document> documentIterator() {
-        Iterator<Document> iterator = new ArrayList<Document>().iterator();
-
-        File dir = new File(idxFolder);
-        File[] files = dir.listFiles((d, name) -> name.startsWith("Doc_Store"));
-        for (int i = 0; i < files.length; ++i) {
-            DocumentStore mapDB = MapdbDocStore.createOrOpen(files[i].getPath());
-            iterator = Iterators.concat(iterator, Iterators.transform(mapDB.iterator(), entry -> entry.getValue()));
-            mapDB.close();
-        }
-        return iterator;
-    }
-
-    /**
-     * Deletes all documents in all disk segments of the inverted index that match the query.
-     *
-     * @param keyword
-     */
-    public void deleteDocuments(String keyword) {
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Gets the total number of segments in the inverted index.
-     * This function is used for checking correctness in test cases.
-     *
-     * @return number of index segments.
-     * <p>
-     * Q: used in disk or in-memory
-     */
-    public int getNumSegments() {
-        File dir = new File(idxFolder);
-        File[] files = dir.listFiles((d, name) -> name.startsWith("segment"));
-        return files.length;
-    }
-
-    /**
-     * Reads a disk segment into memory based on segmentNum.
-     * This function is mainly used for checking correctness in test cases.
-     *
-     * @param segmentNum n-th segment in the inverted index (start from 0).
-     * @return in-memory data structure with all contents in the index segment, null if segmentNum don't exist.
-     * Q: used in disk or in-memory
-     */
-    public InvertedIndexSegmentForTest getIndexSegment(int segmentNum) {
-        Map<String, List<Integer>> invertedLists = new TreeMap<>();
-        Map<Integer, Document> documents = new HashMap<>();
-
-
-        if (!Files.exists(Paths.get(idxFolder + "segment" + segmentNum))) {
-            return null;
-        }
-
-        // ##### invertedLists  #####
-        SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(idxFolder + "segment" + segmentNum));
-        segMgr.readInitiate();
-
-        // create map(String, List<Integer>) to store keyword and dictionary pair, the list contain 4 attributes
-        Map<String, List<Integer>> dictMap = new TreeMap<>();
-
-        // read keyword and dictionary from segment
-        while (segMgr.hasKeyWord()) {
-            List<Integer> l1 = new ArrayList<>();
-            String k1 = segMgr.readKeywordAndDict(l1);
-            dictMap.put(k1, l1);
-        }
-
-        // read docId from segment and write to invertedLists
-        for (Map.Entry<String, List<Integer>> entry : dictMap.entrySet()) {
-            List<Integer> v = entry.getValue();
-
-            List<Integer> docIdList1 = segMgr.readDocIdList(v.get(0), v.get(1), v.get(2));
-
-            invertedLists.put(entry.getKey(), docIdList1);
-
-        }
-
-        // documents
-        //todo change to convert iterator instead of loopiing through all elements
-        DocumentStore mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + segmentNum);
-        Iterator<Map.Entry<Integer, Document>> it = mapDB.iterator();
-        while (it.hasNext()) {
-            Map.Entry<Integer, Document> m = it.next();
-            documents.put(m.getKey(), m.getValue());
-        }
-
-        mapDB.close();
-        return new InvertedIndexSegmentForTest(invertedLists, documents);
-    }
-
-
 }
