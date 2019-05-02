@@ -160,7 +160,7 @@ public class InvertedIndexManager {
         segMgr.allocateKeywordStart(totalLengthKeyword);
 
         // insert keyword, metadata, docID respectively
-        System.out.println("##### Start to insert keyword #####");
+        //System.out.println("##### Start to insert keyword #####");
 
         // @@@@@
         for (String keyword : keyWordMap.keySet()) {
@@ -170,14 +170,14 @@ public class InvertedIndexManager {
         // allocate the number of keyword on start point of dictionary
         segMgr.allocateNumberOfKeyWord(keyWordMap.size());
 
-        System.out.println("##### Start to insert dictionary slot #####");
+        //System.out.println("##### Start to insert dictionary slot #####");
         for (Map.Entry<String, Set<Integer>> entry : keyWordMap.entrySet()) {
             segMgr.insertMetaDataSlot(entry.getKey().getBytes().length, entry.getValue().size() * Integer.BYTES);
         }
 
-        System.out.println("##### Start to insert docID #####");
+        //System.out.println("##### Start to insert docID #####");
         for (Map.Entry<String, Set<Integer>> entry : keyWordMap.entrySet()) {
-            System.out.println("Insert docID of " + entry.getKey());
+            //System.out.println("Insert docID of " + entry.getKey());
             segMgr.insertListOfDocID(entry.getValue());
         }
 
@@ -187,7 +187,7 @@ public class InvertedIndexManager {
         segMgr.close();
 
         reset();
-        System.out.println("\n\n");
+        //System.out.println("\n\n");
     }
 
 
@@ -248,7 +248,7 @@ public class InvertedIndexManager {
         if (keywords.isEmpty() || keywords.contains("")) {
             return iterator.iterator();
         }
-        Set<String> words = new LinkedHashSet<>();
+        List<String> words = new ArrayList<>();
         for (int i = 0; i < keywords.size(); i++) {
             words.addAll(iiAnalyzer.analyze(keywords.get(i)));
         }
@@ -267,7 +267,7 @@ public class InvertedIndexManager {
         if (keywords.isEmpty()) {
             return iterator.iterator();
         }
-        Set<String> words = new LinkedHashSet<>();
+        List<String> words = new ArrayList<>();
         for (int i = 0; i < keywords.size(); i++) {
             words.addAll(iiAnalyzer.analyze(keywords.get(i)));
         }
