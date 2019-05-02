@@ -46,6 +46,8 @@ public class InvertedIndexManager {
     private static Map<String, Set<Integer>> keyWordMap;
 
 
+    private static DocumentStore mapDB;
+
     /**
      * Number of sequence in disk (for merge)
      */
@@ -89,6 +91,11 @@ public class InvertedIndexManager {
             totalLengthKeyword = 0;
             keyWordMap = new TreeMap<>();
             iiAnalyzer = analyzer;
+            //i think we shouldn't open it in constructor
+            //because what if we actually never flush. and we exit the program because of some other error
+            //professor said assume before flushing all documents can be kept in memory
+            //however when you merge you can't keep all docs in memory
+
 
             Path indexFolderPath = Paths.get(indexFolder);
             if (Files.exists(indexFolderPath) && Files.isDirectory(indexFolderPath)) {
@@ -113,7 +120,6 @@ public class InvertedIndexManager {
      * @param document
      */
     public void addDocument(Document document) {
-
         // process (analyzer) text in the document
         List<String> word = iiAnalyzer.analyze(document.getText());
 
@@ -130,9 +136,12 @@ public class InvertedIndexManager {
         }
 
         // add document into DocStore
-        DocumentStore mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + NUM_SEQ); // not sure
+
+        //mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + NUM_SEQ);
+        File f = new File(idxFolder + "Doc_Store" + NUM_SEQ);
+        if(!f.exists()) mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + NUM_SEQ);
         mapDB.addDocument(document_Counter, document);
-        mapDB.close();
+
 
         ++document_Counter;
 
@@ -282,9 +291,9 @@ public class InvertedIndexManager {
 
         File[] files = getFiles("Doc_Store");
         for (int i = 0; i < files.length; ++i) {
-            DocumentStore mapDB = MapdbDocStore.createOrOpenReadOnly(files[i].getPath());
-            iterator = Iterators.concat(iterator, Iterators.transform(mapDB.iterator(), entry -> entry.getValue()));
-            mapDB.close();
+            DocumentStore mapDBIt = MapdbDocStore.createOrOpenReadOnly(files[i].getPath());
+            iterator = Iterators.concat(iterator, Iterators.transform(mapDBIt.iterator(), entry -> entry.getValue()));
+            mapDBIt.close();
         }
         return iterator;
     }
@@ -352,14 +361,14 @@ public class InvertedIndexManager {
         }
 
         // documents
-        DocumentStore mapDB = MapdbDocStore.createOrOpenReadOnly(idxFolder + "Doc_Store" + segmentNum);
-        Iterator<Map.Entry<Integer, Document>> it = mapDB.iterator();
+        DocumentStore mapDBGetIdx = MapdbDocStore.createOrOpenReadOnly(idxFolder + "Doc_Store" + segmentNum);
+        Iterator<Map.Entry<Integer, Document>> it = mapDBGetIdx.iterator();
         while (it.hasNext()) {
             Map.Entry<Integer, Document> m = it.next();
             documents.put(m.getKey(), m.getValue());
         }
 
-        mapDB.close();
+        mapDBGetIdx.close();
         return new InvertedIndexSegmentForTest(invertedLists, documents);
     }
 
@@ -558,6 +567,7 @@ public class InvertedIndexManager {
     }
 
     private void reset() {
+        mapDB.close();
         ++NUM_SEQ;
         keyWordMap.clear();
         document_Counter = 0;
@@ -598,10 +608,10 @@ public class InvertedIndexManager {
                 }
             }
             if (postingListset.size() >= 1) {
-                DocumentStore mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + i);
-                Iterators.removeIf(mapDB.iterator(), entry -> !postingListset.contains(entry.getKey()));
-                iterator = Iterators.concat(iterator, Iterators.transform(mapDB.iterator(), entry -> entry.getValue()));
-                mapDB.close();
+                DocumentStore mapDBSearch = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + i);
+                Iterators.removeIf(mapDBSearch.iterator(), entry -> !postingListset.contains(entry.getKey()));
+                iterator = Iterators.concat(iterator, Iterators.transform(mapDBSearch.iterator(), entry -> entry.getValue()));
+                mapDBSearch.close();
             }
         }
         return iterator;
