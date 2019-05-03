@@ -39,7 +39,7 @@ public class SegmentInDiskManager {
 
 
     SegmentInDiskManager(Path path) {
-        System.out.println(path.toString());
+        //System.out.println(path.toString());
         pfc = PageFileChannel.createOrOpen(path);
 
         byteBuffer = ByteBuffer.allocate(pfc.PAGE_SIZE);
@@ -74,7 +74,6 @@ public class SegmentInDiskManager {
         insertInteger(valueLength);
         retrieveLocation(docIDPos, valueLength, docIDPos);
         assert (byteBuffer.position() == pointPos.Offset) : "pointer " + pointPos.Offset + " and buffer position " + byteBuffer.position() + " not match";
-        //System.out.println("\n");
     }
 
     public void insertListOfDocID(Set<Integer> lst) {
