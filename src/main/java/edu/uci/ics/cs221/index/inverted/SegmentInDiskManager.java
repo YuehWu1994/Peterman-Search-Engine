@@ -50,8 +50,8 @@ public class SegmentInDiskManager {
 
 
     SegmentInDiskManager(String folder, String seg) {
-        Path path_dict = Paths.get(folder + "segment" + seg);
-        Path path_poisting = Paths.get(folder + "posting" + seg);
+        Path path_dict = Paths.get(folder + "segment_" + seg);
+        Path path_poisting = Paths.get(folder + "posting_" + seg);
         System.out.println(path_dict.toString());
 
         pfc_dict = PageFileChannel.createOrOpen(path_dict);

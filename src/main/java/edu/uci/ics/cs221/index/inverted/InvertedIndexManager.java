@@ -75,6 +75,8 @@ public class InvertedIndexManager {
         OR_SEARCH
     }
 
+
+
     private InvertedIndexManager(String indexFolder, Analyzer analyzer) {
         document_Counter = 0;
     }
@@ -134,8 +136,8 @@ public class InvertedIndexManager {
         // add document into DocStore
 
         //mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + NUM_SEQ);
-        File f = new File(idxFolder + "Doc_Store" + NUM_SEQ);
-        if(!f.exists()) mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + NUM_SEQ);
+        File f = new File(idxFolder + "DocStore_" + NUM_SEQ);
+        if(!f.exists()) mapDB = MapdbDocStore.createOrOpen(idxFolder + "DocStore_" + NUM_SEQ);
         mapDB.addDocument(document_Counter, document);
 
 
@@ -210,6 +212,7 @@ public class InvertedIndexManager {
      */
     public void mergeAllSegments() {
         // merge only happens at even number of segments
+        int k = getNumSegments();
         Preconditions.checkArgument(getNumSegments() % 2 == 0);
 
         String seg1 = "";
@@ -217,13 +220,13 @@ public class InvertedIndexManager {
         File[] files = getFiles("segment");
         File[] files_poisting = getFiles("posting");
 
-        Arrays.sort(files);
-        Arrays.sort(files_poisting);
+        Arrays.sort(files, new Comparator<File>() {@Override public int compare(File o1, File o2) { int n1 = extractNumber(o1.getName());int n2 = extractNumber(o2.getName());return n1 - n2; }private int extractNumber(String name) { int i = 0;try { int s = name.indexOf('_')+1;String number = name.substring(s);i = Integer.parseInt(number); } catch(Exception e) { i = 0; }return i; }});
+        Arrays.sort(files_poisting, new Comparator<File>() {@Override public int compare(File o1, File o2) { int n1 = extractNumber(o1.getName());int n2 = extractNumber(o2.getName());return n1 - n2; }private int extractNumber(String name) { int i = 0;try { int s = name.indexOf('_')+1; String number = name.substring(s);i = Integer.parseInt(number); } catch(Exception e) { i = 0; }return i; }});
 
         for (int i = 0; i < files.length; ++i) {
             if (seg1 != "") {
                 // merge
-                merge(Integer.parseInt(seg1.substring(7)), Integer.parseInt(files[i].getName().substring(7)));
+                merge(Integer.parseInt(seg1.substring(8)), Integer.parseInt(files[i].getName().substring(8)));
 
                 // after merge
                 seg1 = "";
@@ -297,7 +300,7 @@ public class InvertedIndexManager {
     public Iterator<Document> documentIterator() {
         Iterator<Document> iterator = new ArrayList<Document>().iterator();
 
-        File[] files = getFiles("Doc_Store");
+        File[] files = getFiles("DocStore");
         for (int i = 0; i < files.length; ++i) {
             DocumentStore mapDBIt = MapdbDocStore.createOrOpenReadOnly(files[i].getPath());
             iterator = Iterators.concat(iterator, Iterators.transform(mapDBIt.iterator(), entry -> entry.getValue()));
@@ -340,7 +343,7 @@ public class InvertedIndexManager {
         Map<Integer, Document> documents = new HashMap<>();
 
 
-        if (!Files.exists(Paths.get(idxFolder + "segment" + segmentNum))) {
+        if (!Files.exists(Paths.get(idxFolder + "segment_" + segmentNum))) {
             return null;
         }
 
@@ -373,7 +376,7 @@ public class InvertedIndexManager {
         }
 
         // documents
-        DocumentStore mapDBGetIdx = MapdbDocStore.createOrOpenReadOnly(idxFolder + "Doc_Store" + segmentNum);
+        DocumentStore mapDBGetIdx = MapdbDocStore.createOrOpenReadOnly(idxFolder + "DocStore_" + segmentNum);
         Iterator<Map.Entry<Integer, Document>> it = mapDBGetIdx.iterator();
         while (it.hasNext()) {
             Map.Entry<Integer, Document> m = it.next();
@@ -391,11 +394,11 @@ public class InvertedIndexManager {
         // get segment id and docId size
         int sz1, sz2;
 
-        DocumentStore mapDB1 = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + id1);
+        DocumentStore mapDB1 = MapdbDocStore.createOrOpen(idxFolder + "DocStore_" + id1);
         sz1 = (int) mapDB1.size();
 
 
-        DocumentStore mapDB2 = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + id2);
+        DocumentStore mapDB2 = MapdbDocStore.createOrOpen(idxFolder + "DocStore_" + id2);
         sz2 = (int) mapDB2.size();
 
 
@@ -560,37 +563,37 @@ public class InvertedIndexManager {
     private void deleteAndRename(int id1, int id2) {
         // delete segment
         File f1, f2;
-        f1 = new File(idxFolder + "segment" + id1);
-        f2 = new File(idxFolder + "segment" + id2);
+        f1 = new File(idxFolder + "segment_" + id1);
+        f2 = new File(idxFolder + "segment_" + id2);
         f1.delete();
         f2.delete();
 
-        f1 = new File(idxFolder + "posting" + id1);
-        f2 = new File(idxFolder + "posting" + id2);
+        f1 = new File(idxFolder + "posting_" + id1);
+        f2 = new File(idxFolder + "posting_" + id2);
         f1.delete();
         f2.delete();
 
         // rename segment
-        f1 = new File(idxFolder + "segmentmergedSegment");
-        f2 = new File(idxFolder + "segment" + id1 / 2);
+        f1 = new File(idxFolder + "segment_mergedSegment");
+        f2 = new File(idxFolder + "segment_" + id1 / 2);
         boolean success = f1.renameTo(f2);
 
         if (!success) throw new UnsupportedOperationException("rename segment fail");
 
-        f1 = new File(idxFolder + "postingmergedSegment");
-        f2 = new File(idxFolder + "posting" + id1 / 2);
+        f1 = new File(idxFolder + "posting_mergedSegment");
+        f2 = new File(idxFolder + "posting_" + id1 / 2);
         success = f1.renameTo(f2);
 
         if (!success) throw new UnsupportedOperationException("rename segment fail");
 
 
         // delete 2nd document store
-        f2 = new File(idxFolder + "Doc_Store" + id2);
+        f2 = new File(idxFolder + "DocStore_" + id2);
         f2.delete();
 
         // rename 1st document store
-        f1 = new File(idxFolder + "Doc_Store" + id1);
-        f2 = new File(idxFolder + "Doc_Store" + id1 / 2);
+        f1 = new File(idxFolder + "DocStore_" + id1);
+        f2 = new File(idxFolder + "DocStore_" + id1 / 2);
         success = f1.renameTo(f2);
 
         if (!success) throw new UnsupportedOperationException("rename docstore fail");
@@ -616,10 +619,10 @@ public class InvertedIndexManager {
     private Iterator<Document> searchKewords(List<String> keywords, Enum searchOperation) {
         Iterator<Document> iterator = new ArrayList<Document>().iterator();
         File[] files = getFiles("segment");
-        Arrays.sort(files);
+        Arrays.sort(files, new Comparator<File>() {@Override public int compare(File o1, File o2) { int n1 = extractNumber(o1.getName());int n2 = extractNumber(o2.getName());return n1 - n2; }private int extractNumber(String name) { int i = 0;try { int s = name.indexOf('_')+1;String number = name.substring(s);i = Integer.parseInt(number); } catch(Exception e) { i = 0; }return i; }});
         for (int i = 0; i < files.length; ++i) {
             //SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(files[i].getPath()));
-            SegmentInDiskManager segMgr = new SegmentInDiskManager(idxFolder, files[i].getName().substring(7));
+            SegmentInDiskManager segMgr = new SegmentInDiskManager(idxFolder, files[i].getName().substring(8));
             segMgr.readInitiate();
             Map<String, List<Integer>> dictMap = new TreeMap<>();
             Set<Integer> postingListset = new LinkedHashSet<>();
@@ -644,7 +647,7 @@ public class InvertedIndexManager {
                 }
             }
             if (postingListset.size() >= 1) {
-                DocumentStore mapDBSearch = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + i);
+                DocumentStore mapDBSearch = MapdbDocStore.createOrOpen(idxFolder + "DocStore_" + i);
                 Iterators.removeIf(mapDBSearch.iterator(), entry -> !postingListset.contains(entry.getKey()));
                 iterator = Iterators.concat(iterator, Iterators.transform(mapDBSearch.iterator(), entry -> entry.getValue()));
                 mapDBSearch.close();
