@@ -243,7 +243,10 @@ public class SegmentInDiskManager {
         bb.clear();
         bb = pfc.readPage(lc.Page);
 
-        for (int i = 0; i < length - disToEnd; ++i) concat[p++] = bb.get();
+        for (int i = 0; i < length - disToEnd; i++)
+        {
+            concat[p++] = bb.get();
+        }
 
         // set lc offset
         lc.Offset += (length - disToEnd);

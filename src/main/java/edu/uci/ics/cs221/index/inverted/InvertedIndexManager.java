@@ -7,6 +7,7 @@ import edu.uci.ics.cs221.analysis.Analyzer;
 import edu.uci.ics.cs221.storage.DocumentStore;
 import edu.uci.ics.cs221.storage.MapdbDocStore;
 import edu.uci.ics.cs221.storage.Document;
+import org.eclipse.collections.impl.tuple.ImmutableEntry;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -16,6 +17,8 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.ArrayList;
 import java.io.File;
+
+import static com.google.common.collect.Maps.immutableEntry;
 
 /**
  * This class manages an disk-based inverted index and all the documents in the inverted index.
@@ -39,12 +42,14 @@ public class InvertedIndexManager {
      * In test cases, the default merge threshold could possibly be set to any number.
      */
     public static int DEFAULT_MERGE_THRESHOLD = 8;
+    private static int DEFAULT_ADD_DOCUMENT_THRESHOLD = 50;
 
     /**
      * Map keyword with list of document ID
      */
     private static Map<String, Set<Integer>> keyWordMap;
 
+    private static Map<Integer, Document> documentsMap;
 
     private static DocumentStore mapDB;
 
@@ -91,11 +96,7 @@ public class InvertedIndexManager {
             totalLengthKeyword = 0;
             keyWordMap = new TreeMap<>();
             iiAnalyzer = analyzer;
-            //i think we shouldn't open it in constructor
-            //because what if we actually never flush. and we exit the program because of some other error
-            //professor said assume before flushing all documents can be kept in memory
-            //however when you merge you can't keep all docs in memory
-
+            documentsMap = new TreeMap<>();
 
             Path indexFolderPath = Paths.get(indexFolder);
             if (Files.exists(indexFolderPath) && Files.isDirectory(indexFolderPath)) {
@@ -136,15 +137,15 @@ public class InvertedIndexManager {
         }
 
         // add document into DocStore
-
-        //mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + NUM_SEQ);
-        File f = new File(idxFolder + "Doc_Store" + NUM_SEQ);
-        if(!f.exists()) mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + NUM_SEQ);
-        mapDB.addDocument(document_Counter, document);
-
+        documentsMap.put(document_Counter, document);
 
         ++document_Counter;
-
+        if(document_Counter == DEFAULT_ADD_DOCUMENT_THRESHOLD)
+        {
+            mapDB = MapdbDocStore.createWithBulkLoad(idxFolder + "Doc_Store" + NUM_SEQ, Iterators.transform(documentsMap.entrySet().iterator(), entry -> immutableEntry(entry.getKey(), entry.getValue())));
+            documentsMap.clear();
+            mapDB.close();
+        }
         if (document_Counter == DEFAULT_FLUSH_THRESHOLD) {
             flush();
         }
@@ -162,7 +163,22 @@ public class InvertedIndexManager {
         if (document_Counter == 0) {
             return;
         }
-
+        if(documentsMap.size() > 0)
+        {
+            File f = new File(idxFolder + "Doc_Store" + NUM_SEQ);
+            if(f.exists()) {
+                mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + NUM_SEQ);
+                for (Map.Entry<Integer, Document> entry : documentsMap.entrySet()) {
+                    mapDB.addDocument(entry.getKey(), entry.getValue());
+                }
+                mapDB.close();
+            }
+            else
+            {
+                mapDB = MapdbDocStore.createWithBulkLoad(idxFolder + "Doc_Store" + NUM_SEQ, Iterators.transform(documentsMap.entrySet().iterator(), entry -> immutableEntry(entry.getKey(), entry.getValue())));
+                mapDB.close();
+            }
+        }
         SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(idxFolder + "segment" + NUM_SEQ));
 
         // allocate the position on start point of keyword
@@ -568,11 +584,12 @@ public class InvertedIndexManager {
 
     private void reset() {
 
-        mapDB.close();
+        //mapDB.close();
         ++NUM_SEQ;
         keyWordMap.clear();
         document_Counter = 0;
         totalLengthKeyword = 0;
+        documentsMap.clear();
     }
 
     private File[] getFiles(String fileName) {
