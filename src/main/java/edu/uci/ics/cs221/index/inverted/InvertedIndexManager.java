@@ -625,7 +625,7 @@ public class InvertedIndexManager {
             SegmentInDiskManager segMgr = new SegmentInDiskManager(idxFolder, files[i].getName().substring(8));
             segMgr.readInitiate();
             Map<String, List<Integer>> dictMap = new TreeMap<>();
-            Set<Integer> postingListset = new LinkedHashSet<>();
+            Set<Integer> postingListset = new TreeSet<>();
             while (segMgr.hasKeyWord()) {
                 List<Integer> l1 = new ArrayList<>();
                 String k1 = segMgr.readKeywordAndDict(l1);
@@ -647,10 +647,11 @@ public class InvertedIndexManager {
                 }
             }
             if (postingListset.size() >= 1) {
-                DocumentStore mapDBSearch = MapdbDocStore.createOrOpen(idxFolder + "DocStore_" + i);
-                Iterators.removeIf(mapDBSearch.iterator(), entry -> !postingListset.contains(entry.getKey()));
-                iterator = Iterators.concat(iterator, Iterators.transform(mapDBSearch.iterator(), entry -> entry.getValue()));
-                mapDBSearch.close();
+                Collections.sort(Lists.newArrayList(postingListset));
+                DocumentStore mapDBSearch = MapdbDocStore.createOrOpenReadOnly(idxFolder + "DocStore_" + i);
+                //Iterators.removeIf(mapDBSearch.iterator(), entry -> !postingListset.contains(entry.getKey()));
+                iterator = Iterators.concat(iterator, Iterators.transform(postingListset.iterator(), entry -> mapDBSearch.getDocument(entry)));
+                //mapDBSearch.close();
             }
         }
         return iterator;
