@@ -7,7 +7,6 @@ import edu.uci.ics.cs221.analysis.Analyzer;
 import edu.uci.ics.cs221.storage.DocumentStore;
 import edu.uci.ics.cs221.storage.MapdbDocStore;
 import edu.uci.ics.cs221.storage.Document;
-import org.eclipse.collections.impl.tuple.ImmutableEntry;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -18,7 +17,6 @@ import java.util.*;
 import java.util.ArrayList;
 import java.io.File;
 
-import static com.google.common.collect.Maps.immutableEntry;
 
 /**
  * This class manages an disk-based inverted index and all the documents in the inverted index.
@@ -42,14 +40,12 @@ public class InvertedIndexManager {
      * In test cases, the default merge threshold could possibly be set to any number.
      */
     public static int DEFAULT_MERGE_THRESHOLD = 8;
-    private static int DEFAULT_ADD_DOCUMENT_THRESHOLD = 50;
 
     /**
      * Map keyword with list of document ID
      */
     private static Map<String, Set<Integer>> keyWordMap;
 
-    private static Map<Integer, Document> documentsMap;
 
     private static DocumentStore mapDB;
 
@@ -136,15 +132,15 @@ public class InvertedIndexManager {
         }
 
         // add document into DocStore
-        documentsMap.put(document_Counter, document);
+
+        //mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + NUM_SEQ);
+        File f = new File(idxFolder + "Doc_Store" + NUM_SEQ);
+        if(!f.exists()) mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + NUM_SEQ);
+        mapDB.addDocument(document_Counter, document);
+
 
         ++document_Counter;
-        if(document_Counter == DEFAULT_ADD_DOCUMENT_THRESHOLD)
-        {
-            mapDB = MapdbDocStore.createWithBulkLoad(idxFolder + "Doc_Store" + NUM_SEQ, Iterators.transform(documentsMap.entrySet().iterator(), entry -> immutableEntry(entry.getKey(), entry.getValue())));
-            documentsMap.clear();
-            mapDB.close();
-        }
+
         if (document_Counter == DEFAULT_FLUSH_THRESHOLD) {
             flush();
         }
@@ -602,12 +598,12 @@ public class InvertedIndexManager {
 
     private void reset() {
 
-        //mapDB.close();
+        mapDB.close();
         ++NUM_SEQ;
         keyWordMap.clear();
         document_Counter = 0;
         totalLengthKeyword = 0;
-        documentsMap.clear();
+        //documentsMap.clear();
     }
 
     private File[] getFiles(String fileName) {
@@ -623,7 +619,7 @@ public class InvertedIndexManager {
         Arrays.sort(files);
         for (int i = 0; i < files.length; ++i) {
             //SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(files[i].getPath()));
-            SegmentInDiskManager segMgr = new SegmentInDiskManager(idxFolder, files[i].getPath().substring(7));
+            SegmentInDiskManager segMgr = new SegmentInDiskManager(idxFolder, files[i].getName().substring(7));
             segMgr.readInitiate();
             Map<String, List<Integer>> dictMap = new TreeMap<>();
             Set<Integer> postingListset = new LinkedHashSet<>();
@@ -634,8 +630,7 @@ public class InvertedIndexManager {
             }
 
             // Maybe here (Sadeem)
-            // segMgr.readPostingInitiate()
-
+            segMgr.readPostingInitiate();
             for (int j = 0; j < keywords.size(); j++) {
                 int pos = Collections.binarySearch(Lists.newArrayList(dictMap.keySet()), keywords.get(j));
                 if (pos >= 0) {
