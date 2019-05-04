@@ -131,7 +131,6 @@ public class SegmentInDiskManager {
         byteBuffer = pfc_dict.readPage(pointPos.Page);
         byteBuffer.position(pointPos.Offset);
 
-        // set docIDPos
         int szKeyword = readInt(byteBuffer, pointPos, true, WriteToWhere.To_Dictionary_File);
         retrieveLocation(pointPos, szKeyword * SLOT_SIZE, dictEndPos);
         //System.out.println("doc ID offset is: " + docIDPos.Offset);
