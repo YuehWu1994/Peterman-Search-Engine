@@ -94,6 +94,10 @@ public class InvertedIndexManager {
             totalLengthKeyword = 0;
             keyWordMap = new TreeMap<>();
             iiAnalyzer = analyzer;
+            //i think we shouldn't open it in constructor
+            //because what if we actually never flush. and we exit the program because of some other error
+            //professor said assume before flushing all documents can be kept in memory
+            //however when you merge you can't keep all docs in memory
 
             Path indexFolderPath = Paths.get(indexFolder);
             if (Files.exists(indexFolderPath) && Files.isDirectory(indexFolderPath)) {
@@ -136,8 +140,10 @@ public class InvertedIndexManager {
         // add document into DocStore
 
         //mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + NUM_SEQ);
+
         File f = new File(idxFolder + "DocStore_" + NUM_SEQ);
         if(!f.exists()) mapDB = MapdbDocStore.createOrOpen(idxFolder + "DocStore_" + NUM_SEQ);
+
         mapDB.addDocument(document_Counter, document);
 
 
@@ -171,39 +177,25 @@ public class InvertedIndexManager {
         // allocate the position on start point of keyword
         segMgr.allocateKeywordStart(totalLengthKeyword);
 
-        // insert keyword, metadata, docID respectively
-        //System.out.println("##### Start to insert keyword #####");
 
-        for (String keyword : keyWordMap.keySet()) {
-            segMgr.insertKeyWord(keyword);
+        // insert keyword, metadata, docID in one pass
+        for (Map.Entry<String, Set<Integer>> entry : keyWordMap.entrySet()) {
+            segMgr.insertKeyWord(entry.getKey());
+            segMgr.insertMetaDataSlot(entry.getKey().getBytes().length, entry.getValue().size() * Integer.BYTES);
+            segMgr.insertListOfDocID(entry.getValue());
         }
 
         // allocate the number of keyword on start point of dictionary
         segMgr.allocateNumberOfKeyWord(keyWordMap.size());
 
-        //System.out.println("##### Start to insert dictionary slot #####");
-        for (Map.Entry<String, Set<Integer>> entry : keyWordMap.entrySet()) {
-            segMgr.insertMetaDataSlot(entry.getKey().getBytes().length, entry.getValue().size() * Integer.BYTES);
-        }
-
 
         // append all dictionary byte to new file
         segMgr.appendAllbyte();
-
-
-
-        System.out.println("##### Start to insert docID #####");
-        for (Map.Entry<String, Set<Integer>> entry : keyWordMap.entrySet()) {
-            //System.out.println("Insert docID of " + entry.getKey());
-            segMgr.insertListOfDocID(entry.getValue());
-        }
-
         segMgr.appendPage();
 
         segMgr.close();
 
         reset();
-        //System.out.println("\n\n");
     }
 
 
@@ -376,7 +368,9 @@ public class InvertedIndexManager {
         }
 
         // documents
+
         DocumentStore mapDBGetIdx = MapdbDocStore.createOrOpenReadOnly(idxFolder + "DocStore_" + segmentNum);
+
         Iterator<Map.Entry<Integer, Document>> it = mapDBGetIdx.iterator();
         while (it.hasNext()) {
             Map.Entry<Integer, Document> m = it.next();
@@ -423,9 +417,6 @@ public class InvertedIndexManager {
         // insert to new segment
         insertAtMergedSegment(mergedMap, segMgr1, segMgr2, segMgrMerge, totalLengthKeyword, sz1);
 
-
-        // append last page
-        segMgrMerge.appendPage();
 
         // add documentStore at doc1 toward doc0
         for (int i = 0; i < sz2; ++i) {
@@ -502,62 +493,62 @@ public class InvertedIndexManager {
         segMgrMerge.allocateKeywordStart(totalLengthKeyword);
 
 
-        // insert keyword, metadata, docID respectively
-        for (String keyword : mergedMap.keySet()) {
-            segMgrMerge.insertKeyWord(keyword);
-        }
-
-
-        // allocate the number of keyword on start point of dictionary
-        segMgrMerge.allocateNumberOfKeyWord(mergedMap.size());
-
-        for (Map.Entry<String, List<Integer>> entry : mergedMap.entrySet()) {
-            int docIdLength = entry.getValue().get(3);
-
-            // if this key word exists in both segments
-            if (entry.getValue().size() == 8) docIdLength += entry.getValue().get(7);
-
-            segMgrMerge.insertMetaDataSlot(entry.getKey().getBytes().length, docIdLength);
-        }
-
-        // append all dictionary byte to new file
-        segMgrMerge.appendAllbyte();
-
         // initiate for reading posting list
         segMgr1.readPostingInitiate();
         segMgr2.readPostingInitiate();
 
 
-        // read docId from segment 1, 2 and write to new segment
         for (Map.Entry<String, List<Integer>> entry : mergedMap.entrySet()) {
-            List<Integer> docIdList1 = new ArrayList<>(), docIdList2 = new ArrayList<>();
 
-            List<Integer> v = entry.getValue();
+            // extract docIdList
+            List<Integer> docIdList = extractDocList(entry.getValue(), segMgr1, segMgr2, sz1);
 
-            // the keyword exist in both segments
-            if (v.size() == 8) {
-                docIdList1 = segMgr1.readDocIdList(v.get(1), v.get(2), v.get(3));
-                docIdList2 = segMgr2.readDocIdList(v.get(5), v.get(6), v.get(7));
-            } else {
-                // exist in either  1st/2nd segment
-                if (v.get(0) == 0) docIdList1 = segMgr1.readDocIdList(v.get(1), v.get(2), v.get(3));
-                else docIdList2 = segMgr2.readDocIdList(v.get(1), v.get(2), v.get(3));
-            }
+            // insert segment
+            segMgrMerge.insertKeyWord(entry.getKey());
+            int docIdLength = entry.getValue().get(3);
+            // if this key word exists in both segments
+            if (entry.getValue().size() == 8) docIdLength += entry.getValue().get(7);
 
-            // convert docId in segment 2
-
-            for (int i = 0; i < docIdList2.size(); ++i) {
-                int id_v = docIdList2.get(i);
-                id_v += sz1;
-                docIdList2.set(i, id_v);
-            }
-
-            // concat docId2 to docId1
-            docIdList1.addAll(docIdList2);
-
-            segMgrMerge.insertListOfDocID(new HashSet<>(docIdList1));
+            segMgrMerge.insertMetaDataSlot(entry.getKey().getBytes().length, docIdLength);
+            segMgrMerge.insertListOfDocID(new HashSet<>(docIdList));
         }
 
+        segMgrMerge.allocateNumberOfKeyWord(mergedMap.size());
+
+
+        // append all dictionary byte to new file
+        segMgrMerge.appendAllbyte();
+
+        // append last page
+        segMgrMerge.appendPage();
+
+    }
+
+    private List<Integer> extractDocList(List<Integer> v, SegmentInDiskManager segMgr1, SegmentInDiskManager segMgr2, int sz1){
+        List<Integer> docIdList1 = new ArrayList<>(), docIdList2 = new ArrayList<>();
+
+
+        // the keyword exist in both segments
+        if (v.size() == 8) {
+            docIdList1 = segMgr1.readDocIdList(v.get(1), v.get(2), v.get(3));
+            docIdList2 = segMgr2.readDocIdList(v.get(5), v.get(6), v.get(7));
+        } else {
+            // exist in either  1st/2nd segment
+            if (v.get(0) == 0) docIdList1 = segMgr1.readDocIdList(v.get(1), v.get(2), v.get(3));
+            else docIdList2 = segMgr2.readDocIdList(v.get(1), v.get(2), v.get(3));
+        }
+
+        // convert docId in segment 2
+        for (int i = 0; i < docIdList2.size(); ++i) {
+            int id_v = docIdList2.get(i);
+            id_v += sz1;
+            docIdList2.set(i, id_v);
+        }
+
+        // concat docId2 to docId1
+        docIdList1.addAll(docIdList2);
+
+        return docIdList1;
     }
 
     private void deleteAndRename(int id1, int id2) {

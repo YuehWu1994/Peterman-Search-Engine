@@ -26,6 +26,7 @@ public class SegmentInDiskManager {
     ByteBuffer byteBuffer;
     ByteBuffer refByteBuffer; // this byte buffer is used to read keyword or docId
 
+
     public static int SLOT_SIZE = 16;
 
 
@@ -49,6 +50,13 @@ public class SegmentInDiskManager {
     }
 
 
+    /*
+     * Store position of next inserting keyword and Dictionary in dictByteBuffer
+     */
+    private static int nextKeywordPos;
+    private static int nextDictPos;
+
+
     SegmentInDiskManager(String folder, String seg) {
         Path path_dict = Paths.get(folder + "segment_" + seg);
         Path path_poisting = Paths.get(folder + "posting_" + seg);
@@ -64,6 +72,9 @@ public class SegmentInDiskManager {
         pointPos = new Location(0, 0);
         docIDPos = new Location(0, 0);
         dictEndPos = new Location(0, 0);
+
+        nextKeywordPos = 0;
+        nextDictPos = 0;
     }
 
     /**
@@ -71,8 +82,13 @@ public class SegmentInDiskManager {
      */
 
     public void insertKeyWord(String str) {
+        // point
+        dictByteBuffer.position(nextKeywordPos);
+
         insertString(str);
-        assert (byteBuffer.position() == pointPos.Offset) : "pointer " + pointPos.Offset + " and buffer position " + byteBuffer.position() + " not match";
+
+        // update
+        nextKeywordPos += str.getBytes().length;
     }
 
     /*
@@ -80,6 +96,9 @@ public class SegmentInDiskManager {
      */
     public void insertMetaDataSlot(int keyLength, int valueLength)
     {
+        // point
+        dictByteBuffer.position(nextDictPos);
+
         insertShort(keyWordPos.Page);
         insertShort(keyWordPos.Offset);
         insertInteger(keyLength, WriteToWhere.To_Dictionary_File);
@@ -90,8 +109,8 @@ public class SegmentInDiskManager {
         insertInteger(valueLength, WriteToWhere.To_Dictionary_File);
         retrieveLocation(docIDPos, valueLength, docIDPos);
 
-        //assert (byteBuffer.position() == pointPos.Offset) : "pointer " + pointPos.Offset + " and buffer position " + byteBuffer.position() + " not match";
-        //System.out.println("\n");
+        // update
+        nextDictPos += SLOT_SIZE;
     }
 
     public void insertListOfDocID(Set<Integer> lst) {
@@ -112,7 +131,6 @@ public class SegmentInDiskManager {
         byteBuffer = pfc_dict.readPage(pointPos.Page);
         byteBuffer.position(pointPos.Offset);
 
-        // set docIDPos
         int szKeyword = readInt(byteBuffer, pointPos, true, WriteToWhere.To_Dictionary_File);
         retrieveLocation(pointPos, szKeyword * SLOT_SIZE, dictEndPos);
         //System.out.println("doc ID offset is: " + docIDPos.Offset);
@@ -127,9 +145,6 @@ public class SegmentInDiskManager {
         byteBuffer = pfc_posting.readPage(0);
         pointPos.Page = 0;
         pointPos.Offset = 0;
-
-
-        // set docIDPos
 
 
         // set refByteBuffer
@@ -237,6 +252,9 @@ public class SegmentInDiskManager {
         {
             if(writeWhere == WriteToWhere.To_Dictionary_File)  bb = pfc_dict.readPage(lc.Page);
             else bb = pfc_posting.readPage(lc.Page);
+
+            pointPos.Page += 1;
+            pointPos.Offset = 0;
         }
         //implement equals location
         //System.out.print("Read integer at (" + lc.Page + "," + lc.Offset + "), length is: 4");
@@ -371,6 +389,9 @@ public class SegmentInDiskManager {
         dictByteBuffer.putShort((short) (totalLengthKeyWord / pfc_dict.PAGE_SIZE));
         dictByteBuffer.putShort((short) (totalLengthKeyWord % pfc_dict.PAGE_SIZE));
 
+        // initialize position
+        nextKeywordPos = Integer.BYTES;
+        nextDictPos = totalLengthKeyWord + Integer.BYTES;
 
         //pointPos.Offset += Integer.BYTES;  ####
         //System.out.println("====== Keyword initial position is: " + pointPos.Page + ' ' + pointPos.Offset + " ====== ");
@@ -379,6 +400,8 @@ public class SegmentInDiskManager {
     // allocate number of keyword at the location where dictionary start
     public void allocateNumberOfKeyWord(int szKeyword) {
         //System.out.println("====== Dictionary initial position is: " + pointPos.Page + ' ' + pointPos.Offset + " ====== ");
+
+        dictByteBuffer.position(nextKeywordPos);
 
         insertInteger(szKeyword, WriteToWhere.To_Dictionary_File);
 
