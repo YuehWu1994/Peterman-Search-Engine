@@ -17,6 +17,7 @@ import java.util.*;
 import java.util.ArrayList;
 import java.io.File;
 
+
 /**
  * This class manages an disk-based inverted index and all the documents in the inverted index.
  * <p>
@@ -73,6 +74,8 @@ public class InvertedIndexManager {
         AND_SEARCH,
         OR_SEARCH
     }
+
+
 
     private InvertedIndexManager(String indexFolder, Analyzer analyzer) {
         document_Counter = 0;
@@ -138,8 +141,10 @@ public class InvertedIndexManager {
         // add document into DocStore
 
         //mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + NUM_SEQ);
-        File f = new File(idxFolder + "Doc_Store" + NUM_SEQ);
-        if(!f.exists()) mapDB = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + NUM_SEQ);
+
+        File f = new File(idxFolder + "DocStore_" + NUM_SEQ);
+        if(!f.exists()) mapDB = MapdbDocStore.createOrOpen(idxFolder + "DocStore_" + NUM_SEQ);
+
         mapDB.addDocument(document_Counter, document);
 
 
@@ -163,7 +168,12 @@ public class InvertedIndexManager {
             return;
         }
 
-        SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(idxFolder + "segment" + NUM_SEQ));
+        SegmentInDiskManager segMgr = new SegmentInDiskManager(idxFolder, Integer.toString(NUM_SEQ));
+
+
+        // allocate dictionary bytebuffer
+        segMgr.allocateByteBuffer(totalLengthKeyword, keyWordMap.size());
+
 
         // allocate the position on start point of keyword
         segMgr.allocateKeywordStart(totalLengthKeyword);
@@ -171,7 +181,6 @@ public class InvertedIndexManager {
         // insert keyword, metadata, docID respectively
         //System.out.println("##### Start to insert keyword #####");
 
-        // @@@@@
         for (String keyword : keyWordMap.keySet()) {
             segMgr.insertKeyWord(keyword);
         }
@@ -184,13 +193,18 @@ public class InvertedIndexManager {
             segMgr.insertMetaDataSlot(entry.getKey().getBytes().length, entry.getValue().size() * Integer.BYTES);
         }
 
-        //System.out.println("##### Start to insert docID #####");
+
+        // append all dictionary byte to new file
+        segMgr.appendAllbyte();
+
+
+
+        System.out.println("##### Start to insert docID #####");
         for (Map.Entry<String, Set<Integer>> entry : keyWordMap.entrySet()) {
             //System.out.println("Insert docID of " + entry.getKey());
             segMgr.insertListOfDocID(entry.getValue());
         }
 
-        // @@@@@ append the last page before I close (if not append)
         segMgr.appendPage();
 
         segMgr.close();
@@ -205,17 +219,21 @@ public class InvertedIndexManager {
      */
     public void mergeAllSegments() {
         // merge only happens at even number of segments
+        int k = getNumSegments();
         Preconditions.checkArgument(getNumSegments() % 2 == 0);
 
         String seg1 = "";
 
         File[] files = getFiles("segment");
+        File[] files_poisting = getFiles("posting");
 
-        Arrays.sort(files);
+        Arrays.sort(files, new Comparator<File>() {@Override public int compare(File o1, File o2) { int n1 = extractNumber(o1.getName());int n2 = extractNumber(o2.getName());return n1 - n2; }private int extractNumber(String name) { int i = 0;try { int s = name.indexOf('_')+1;String number = name.substring(s);i = Integer.parseInt(number); } catch(Exception e) { i = 0; }return i; }});
+        Arrays.sort(files_poisting, new Comparator<File>() {@Override public int compare(File o1, File o2) { int n1 = extractNumber(o1.getName());int n2 = extractNumber(o2.getName());return n1 - n2; }private int extractNumber(String name) { int i = 0;try { int s = name.indexOf('_')+1; String number = name.substring(s);i = Integer.parseInt(number); } catch(Exception e) { i = 0; }return i; }});
+
         for (int i = 0; i < files.length; ++i) {
             if (seg1 != "") {
                 // merge
-                merge(seg1, files[i].getName());
+                merge(Integer.parseInt(seg1.substring(8)), Integer.parseInt(files[i].getName().substring(8)));
 
                 // after merge
                 seg1 = "";
@@ -289,7 +307,7 @@ public class InvertedIndexManager {
     public Iterator<Document> documentIterator() {
         Iterator<Document> iterator = new ArrayList<Document>().iterator();
 
-        File[] files = getFiles("Doc_Store");
+        File[] files = getFiles("DocStore");
         for (int i = 0; i < files.length; ++i) {
             DocumentStore mapDBIt = MapdbDocStore.createOrOpenReadOnly(files[i].getPath());
             iterator = Iterators.concat(iterator, Iterators.transform(mapDBIt.iterator(), entry -> entry.getValue()));
@@ -332,12 +350,12 @@ public class InvertedIndexManager {
         Map<Integer, Document> documents = new HashMap<>();
 
 
-        if (!Files.exists(Paths.get(idxFolder + "segment" + segmentNum))) {
+        if (!Files.exists(Paths.get(idxFolder + "segment_" + segmentNum))) {
             return null;
         }
 
         // ##### invertedLists  #####
-        SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(idxFolder + "segment" + segmentNum));
+        SegmentInDiskManager segMgr = new SegmentInDiskManager(idxFolder, Integer.toString(segmentNum));
         segMgr.readInitiate();
 
         // create map(String, List<Integer>) to store keyword and dictionary pair, the list contain 4 attributes
@@ -350,6 +368,10 @@ public class InvertedIndexManager {
             dictMap.put(k1, l1);
         }
 
+
+        // initiate for reading posting list
+        segMgr.readPostingInitiate();
+
         // read docId from segment and write to invertedLists
         for (Map.Entry<String, List<Integer>> entry : dictMap.entrySet()) {
             List<Integer> v = entry.getValue();
@@ -361,7 +383,9 @@ public class InvertedIndexManager {
         }
 
         // documents
-        DocumentStore mapDBGetIdx = MapdbDocStore.createOrOpenReadOnly(idxFolder + "Doc_Store" + segmentNum);
+
+        DocumentStore mapDBGetIdx = MapdbDocStore.createOrOpenReadOnly(idxFolder + "DocStore_" + segmentNum);
+
         Iterator<Map.Entry<Integer, Document>> it = mapDBGetIdx.iterator();
         while (it.hasNext()) {
             Map.Entry<Integer, Document> m = it.next();
@@ -375,18 +399,15 @@ public class InvertedIndexManager {
     /**
      * ================HELPER FUNCTIONS==================
      */
-    private void merge(String seg1, String seg2) {
+    private void merge(int id1, int id2) {
         // get segment id and docId size
         int sz1, sz2;
-        int id1 = Integer.parseInt(seg1.substring(7));
-        int id2 = Integer.parseInt(seg2.substring(7));
 
-
-        DocumentStore mapDB1 = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + id1);
+        DocumentStore mapDB1 = MapdbDocStore.createOrOpen(idxFolder + "DocStore_" + id1);
         sz1 = (int) mapDB1.size();
 
 
-        DocumentStore mapDB2 = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + id2);
+        DocumentStore mapDB2 = MapdbDocStore.createOrOpen(idxFolder + "DocStore_" + id2);
         sz2 = (int) mapDB2.size();
 
 
@@ -397,8 +418,8 @@ public class InvertedIndexManager {
          */
         Map<String, List<Integer>> mergedMap = new TreeMap<>();
 
-        SegmentInDiskManager segMgr1 = new SegmentInDiskManager(Paths.get(idxFolder + "segment" + id1));
-        SegmentInDiskManager segMgr2 = new SegmentInDiskManager(Paths.get(idxFolder + "segment" + id2));
+        SegmentInDiskManager segMgr1 = new SegmentInDiskManager(idxFolder, Integer.toString(id1));
+        SegmentInDiskManager segMgr2 = new SegmentInDiskManager(idxFolder, Integer.toString(id2));
         segMgr1.readInitiate();
         segMgr2.readInitiate();
 
@@ -406,7 +427,7 @@ public class InvertedIndexManager {
         // read to fill the map
         int totalLengthKeyword = fillTheMap(mergedMap, segMgr1, segMgr2);
 
-        SegmentInDiskManager segMgrMerge = new SegmentInDiskManager(Paths.get(idxFolder + "mergedSegment"));
+        SegmentInDiskManager segMgrMerge = new SegmentInDiskManager(idxFolder, "mergedSegment");
 
         // insert to new segment
         insertAtMergedSegment(mergedMap, segMgr1, segMgr2, segMgrMerge, totalLengthKeyword, sz1);
@@ -483,6 +504,9 @@ public class InvertedIndexManager {
     }
 
     private void insertAtMergedSegment(Map<String, List<Integer>> mergedMap, SegmentInDiskManager segMgr1, SegmentInDiskManager segMgr2, SegmentInDiskManager segMgrMerge, int totalLengthKeyword, int sz1) {
+        // allocate dictionary bytebuffer
+        segMgrMerge.allocateByteBuffer(totalLengthKeyword, mergedMap.size());
+
         // allocate the position on start point of keyword
         segMgrMerge.allocateKeywordStart(totalLengthKeyword);
 
@@ -504,6 +528,13 @@ public class InvertedIndexManager {
 
             segMgrMerge.insertMetaDataSlot(entry.getKey().getBytes().length, docIdLength);
         }
+
+        // append all dictionary byte to new file
+        segMgrMerge.appendAllbyte();
+
+        // initiate for reading posting list
+        segMgr1.readPostingInitiate();
+        segMgr2.readPostingInitiate();
 
 
         // read docId from segment 1, 2 and write to new segment
@@ -541,26 +572,37 @@ public class InvertedIndexManager {
     private void deleteAndRename(int id1, int id2) {
         // delete segment
         File f1, f2;
-        f1 = new File(idxFolder + "segment" + id1);
-        f2 = new File(idxFolder + "segment" + id2);
+        f1 = new File(idxFolder + "segment_" + id1);
+        f2 = new File(idxFolder + "segment_" + id2);
+        f1.delete();
+        f2.delete();
+
+        f1 = new File(idxFolder + "posting_" + id1);
+        f2 = new File(idxFolder + "posting_" + id2);
         f1.delete();
         f2.delete();
 
         // rename segment
-        f1 = new File(idxFolder + "mergedSegment");
-        f2 = new File(idxFolder + "segment" + id1 / 2);
+        f1 = new File(idxFolder + "segment_mergedSegment");
+        f2 = new File(idxFolder + "segment_" + id1 / 2);
         boolean success = f1.renameTo(f2);
+
+        if (!success) throw new UnsupportedOperationException("rename segment fail");
+
+        f1 = new File(idxFolder + "posting_mergedSegment");
+        f2 = new File(idxFolder + "posting_" + id1 / 2);
+        success = f1.renameTo(f2);
 
         if (!success) throw new UnsupportedOperationException("rename segment fail");
 
 
         // delete 2nd document store
-        f2 = new File(idxFolder + "Doc_Store" + id2);
+        f2 = new File(idxFolder + "DocStore_" + id2);
         f2.delete();
 
         // rename 1st document store
-        f1 = new File(idxFolder + "Doc_Store" + id1);
-        f2 = new File(idxFolder + "Doc_Store" + id1 / 2);
+        f1 = new File(idxFolder + "DocStore_" + id1);
+        f2 = new File(idxFolder + "DocStore_" + id1 / 2);
         success = f1.renameTo(f2);
 
         if (!success) throw new UnsupportedOperationException("rename docstore fail");
@@ -572,6 +614,7 @@ public class InvertedIndexManager {
         keyWordMap.clear();
         document_Counter = 0;
         totalLengthKeyword = 0;
+        //documentsMap.clear();
     }
 
     private File[] getFiles(String fileName) {
@@ -584,17 +627,21 @@ public class InvertedIndexManager {
     private Iterator<Document> searchKewords(List<String> keywords, Enum searchOperation) {
         Iterator<Document> iterator = new ArrayList<Document>().iterator();
         File[] files = getFiles("segment");
-        Arrays.sort(files);
+        Arrays.sort(files, new Comparator<File>() {@Override public int compare(File o1, File o2) { int n1 = extractNumber(o1.getName());int n2 = extractNumber(o2.getName());return n1 - n2; }private int extractNumber(String name) { int i = 0;try { int s = name.indexOf('_')+1;String number = name.substring(s);i = Integer.parseInt(number); } catch(Exception e) { i = 0; }return i; }});
         for (int i = 0; i < files.length; ++i) {
-            SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(files[i].getPath()));
+            //SegmentInDiskManager segMgr = new SegmentInDiskManager(Paths.get(files[i].getPath()));
+            SegmentInDiskManager segMgr = new SegmentInDiskManager(idxFolder, files[i].getName().substring(8));
             segMgr.readInitiate();
             Map<String, List<Integer>> dictMap = new TreeMap<>();
-            Set<Integer> postingListset = new LinkedHashSet<>();
+            Set<Integer> postingListset = new TreeSet<>();
             while (segMgr.hasKeyWord()) {
                 List<Integer> l1 = new ArrayList<>();
                 String k1 = segMgr.readKeywordAndDict(l1);
                 dictMap.put(k1, l1);
             }
+
+            // Maybe here (Sadeem)
+            segMgr.readPostingInitiate();
             for (int j = 0; j < keywords.size(); j++) {
                 int pos = Collections.binarySearch(Lists.newArrayList(dictMap.keySet()), keywords.get(j));
                 if (pos >= 0) {
@@ -608,10 +655,11 @@ public class InvertedIndexManager {
                 }
             }
             if (postingListset.size() >= 1) {
-                DocumentStore mapDBSearch = MapdbDocStore.createOrOpen(idxFolder + "Doc_Store" + i);
-                Iterators.removeIf(mapDBSearch.iterator(), entry -> !postingListset.contains(entry.getKey()));
-                iterator = Iterators.concat(iterator, Iterators.transform(mapDBSearch.iterator(), entry -> entry.getValue()));
-                mapDBSearch.close();
+                Collections.sort(Lists.newArrayList(postingListset));
+                DocumentStore mapDBSearch = MapdbDocStore.createOrOpenReadOnly(idxFolder + "DocStore_" + i);
+                //Iterators.removeIf(mapDBSearch.iterator(), entry -> !postingListset.contains(entry.getKey()));
+                iterator = Iterators.concat(iterator, Iterators.transform(postingListset.iterator(), entry -> mapDBSearch.getDocument(entry)));
+                //mapDBSearch.close();
             }
         }
         return iterator;

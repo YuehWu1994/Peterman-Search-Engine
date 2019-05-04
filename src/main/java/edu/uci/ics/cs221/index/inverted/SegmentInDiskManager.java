@@ -2,6 +2,7 @@ package edu.uci.ics.cs221.index.inverted;
 
 
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -19,7 +20,9 @@ import java.util.Set;
 
 public class SegmentInDiskManager {
 
-    PageFileChannel pfc;
+    PageFileChannel pfc_dict;
+    PageFileChannel pfc_posting;
+    ByteBuffer dictByteBuffer; // this byte buffer is used to write keyword and dictionary
     ByteBuffer byteBuffer;
     ByteBuffer refByteBuffer; // this byte buffer is used to read keyword or docId
 
@@ -31,6 +34,7 @@ public class SegmentInDiskManager {
      */
     private Location keyWordPos;
     private Location docIDPos;
+    private Location dictEndPos;
 
     /*
      * Define the location where we point for insersion/ read
@@ -38,16 +42,28 @@ public class SegmentInDiskManager {
     private Location pointPos;
 
 
-    SegmentInDiskManager(Path path) {
-        //System.out.println(path.toString());
-        pfc = PageFileChannel.createOrOpen(path);
 
-        byteBuffer = ByteBuffer.allocate(pfc.PAGE_SIZE);
-        refByteBuffer = ByteBuffer.allocate(pfc.PAGE_SIZE);
+    private enum WriteToWhere {
+        To_Dictionary_File,
+        To_Poisting_List
+    }
+
+
+    SegmentInDiskManager(String folder, String seg) {
+        Path path_dict = Paths.get(folder + "segment_" + seg);
+        Path path_poisting = Paths.get(folder + "posting_" + seg);
+        System.out.println(path_dict.toString());
+
+        pfc_dict = PageFileChannel.createOrOpen(path_dict);
+        pfc_posting = PageFileChannel.createOrOpen(path_poisting);
+
+        byteBuffer = ByteBuffer.allocate(pfc_dict.PAGE_SIZE);
+        refByteBuffer = ByteBuffer.allocate(pfc_dict.PAGE_SIZE);
 
         keyWordPos = new Location(0, Integer.BYTES); // no end of docID, start by (0, 4)
         pointPos = new Location(0, 0);
         docIDPos = new Location(0, 0);
+        dictEndPos = new Location(0, 0);
     }
 
     /**
@@ -66,19 +82,19 @@ public class SegmentInDiskManager {
     {
         insertShort(keyWordPos.Page);
         insertShort(keyWordPos.Offset);
-        insertInteger(keyLength);
+        insertInteger(keyLength, WriteToWhere.To_Dictionary_File);
         retrieveLocation(keyWordPos, keyLength, keyWordPos);
 
         insertShort(docIDPos.Page);
         insertShort(docIDPos.Offset);
-        insertInteger(valueLength);
+        insertInteger(valueLength, WriteToWhere.To_Dictionary_File);
         retrieveLocation(docIDPos, valueLength, docIDPos);
-        assert (byteBuffer.position() == pointPos.Offset) : "pointer " + pointPos.Offset + " and buffer position " + byteBuffer.position() + " not match";
+
     }
 
     public void insertListOfDocID(Set<Integer> lst) {
-        for (Integer i : lst) insertInteger(i);
-        assert (byteBuffer.position() == pointPos.Offset) : "pointer " + pointPos.Offset + " and buffer position " + byteBuffer.position() + " not match";
+        for (Integer i : lst) insertInteger(i, WriteToWhere.To_Poisting_List);
+        //assert (byteBuffer.position() == pointPos.Offset) : "pointer " + pointPos.Offset + " and buffer position " + byteBuffer.position() + " not match";
     }
 
     /**
@@ -86,34 +102,49 @@ public class SegmentInDiskManager {
      */
     public void readInitiate() {
         // set pointPos
-        byteBuffer = pfc.readPage(0);
+        byteBuffer = pfc_dict.readPage(0);
         pointPos.Page = byteBuffer.getShort();
         pointPos.Offset = byteBuffer.getShort();
 
         // set byteBuffer to where the dictionary start (the page `pointPos` point at)
-        byteBuffer = pfc.readPage(pointPos.Page); // not sure
+        byteBuffer = pfc_dict.readPage(pointPos.Page);
         byteBuffer.position(pointPos.Offset);
 
         // set docIDPos
-        int szKeyword = readInt(byteBuffer, pointPos, true);
-        retrieveLocation(pointPos, szKeyword * SLOT_SIZE, docIDPos);
+        int szKeyword = readInt(byteBuffer, pointPos, true, WriteToWhere.To_Dictionary_File);
+        retrieveLocation(pointPos, szKeyword * SLOT_SIZE, dictEndPos);
         //System.out.println("doc ID offset is: " + docIDPos.Offset);
 
         // set refByteBuffer
-        refByteBuffer = pfc.readPage(0);
+        refByteBuffer = pfc_dict.readPage(0);
         refByteBuffer.position(4);
     }
 
+    public void readPostingInitiate() {
+        // set pointPos
+        byteBuffer = pfc_posting.readPage(0);
+        pointPos.Page = 0;
+        pointPos.Offset = 0;
+
+
+        // set docIDPos
+
+
+        // set refByteBuffer
+        refByteBuffer.clear();
+    }
+
+
     public String readKeywordAndDict(List<Integer> dict) {
-        short pg = readShort(byteBuffer, pointPos, true);
-        short offset = readShort(byteBuffer, pointPos, true);
-        int length = readInt(byteBuffer, pointPos, true);
+        short pg = readShort(byteBuffer, pointPos, true, WriteToWhere.To_Dictionary_File);
+        short offset = readShort(byteBuffer, pointPos, true, WriteToWhere.To_Dictionary_File);
+        int length = readInt(byteBuffer, pointPos, true, WriteToWhere.To_Dictionary_File);
 
-        String keyword = readString(length, refByteBuffer, keyWordPos, false);
+        String keyword = readString(length, refByteBuffer, keyWordPos, false, WriteToWhere.To_Dictionary_File);
 
-        short docPg = readShort(byteBuffer, pointPos, true);
-        short docOffset = readShort(byteBuffer, pointPos, true);
-        int docLength = readInt(byteBuffer, pointPos, true);
+        short docPg = readShort(byteBuffer, pointPos, true, WriteToWhere.To_Dictionary_File);
+        short docOffset = readShort(byteBuffer, pointPos, true, WriteToWhere.To_Dictionary_File);
+        int docLength = readInt(byteBuffer, pointPos, true, WriteToWhere.To_Dictionary_File);
 
         //System.out.println("\n");
 
@@ -129,7 +160,7 @@ public class SegmentInDiskManager {
         int docSz = docIdLength / Integer.BYTES;
         Location loc = new Location(pageNum, listOffset);
         for (int i = 0; i < docSz; ++i) {
-            docIdList.add(readInt(byteBuffer, loc, true));
+            docIdList.add(readInt(byteBuffer, loc, true, WriteToWhere.To_Poisting_List));
         }
         return docIdList;
     }
@@ -171,10 +202,10 @@ public class SegmentInDiskManager {
         return new Pair(byteA, byteB);
     }
 
-    public String readString(int len, ByteBuffer bb, Location lc, boolean pointToDict) {
+    public String readString(int len, ByteBuffer bb, Location lc, boolean pointToDict, WriteToWhere writeWhere) {
         //System.out.print("Read string at (" + lc.Page + "," + lc.Offset + "), length is: " + len);
         byte[] b = new byte[len];
-        ByteBuffer newBb = readByte(bb, lc, pfc.PAGE_SIZE - lc.Offset, len, b);
+        ByteBuffer newBb = readByte(bb, lc, pfc_dict.PAGE_SIZE - lc.Offset, len, b, writeWhere);
 
         // determine which byteBuffer we should assign to
         if (pointToDict) byteBuffer = newBb;
@@ -185,10 +216,10 @@ public class SegmentInDiskManager {
         return str;
     }
 
-    public short readShort(ByteBuffer bb, Location lc, boolean pointToDict) {
+    public short readShort(ByteBuffer bb, Location lc, boolean pointToDict, WriteToWhere writeWhere) {
         //System.out.print("Read short at (" + lc.Page + "," + lc.Offset + "), length is: 2");
         byte[] b = new byte[Short.BYTES];
-        ByteBuffer newBb = readByte(bb, lc, byteBuffer.remaining(), Short.BYTES, b);
+        ByteBuffer newBb = readByte(bb, lc, byteBuffer.remaining(), Short.BYTES, b, writeWhere);
 
         // determine which byteBuffer we should assign to
         if (pointToDict) byteBuffer = newBb;
@@ -199,15 +230,16 @@ public class SegmentInDiskManager {
         return sh;
     }
 
-    public int readInt(ByteBuffer bb, Location lc, boolean pointToDict) {
+    public int readInt(ByteBuffer bb, Location lc, boolean pointToDict, WriteToWhere writeWhere) {
         if(pointPos.Page != lc.Page)
         {
-            bb = pfc.readPage(lc.Page);
+            if(writeWhere == WriteToWhere.To_Dictionary_File)  bb = pfc_dict.readPage(lc.Page);
+            else bb = pfc_posting.readPage(lc.Page);
         }
         //implement equals location
         //System.out.print("Read integer at (" + lc.Page + "," + lc.Offset + "), length is: 4");
         byte[] b = new byte[Integer.BYTES];
-        ByteBuffer newBb = readByte(bb, lc, byteBuffer.remaining(), Integer.BYTES, b);
+        ByteBuffer newBb = readByte(bb, lc, byteBuffer.remaining(), Integer.BYTES, b, writeWhere);
 
         // determine which byteBuffer we should assign to
         if (pointToDict) byteBuffer = newBb;
@@ -221,7 +253,7 @@ public class SegmentInDiskManager {
     /**
      * @param disToEnd: distance(byte) from current pointing offset to end of page
      */
-    public ByteBuffer readByte(ByteBuffer bb, Location lc, int disToEnd, int length, byte[] concat) {
+    public ByteBuffer readByte(ByteBuffer bb, Location lc, int disToEnd, int length, byte[] concat, WriteToWhere writeWhere) {
         //byte [] concat = new byte[length];
 
         int p = 0;
@@ -239,9 +271,14 @@ public class SegmentInDiskManager {
         lc.Offset = 0;
 
         bb.clear();
-        bb = pfc.readPage(lc.Page);
 
-        for (int i = 0; i < length - disToEnd; ++i) concat[p++] = bb.get();
+        if(writeWhere == WriteToWhere.To_Dictionary_File)  bb = pfc_dict.readPage(lc.Page);
+        else bb = pfc_posting.readPage(lc.Page);
+
+        for (int i = 0; i < length - disToEnd; i++)
+        {
+            concat[p++] = bb.get();
+        }
 
         // set lc offset
         lc.Offset += (length - disToEnd);
@@ -251,44 +288,53 @@ public class SegmentInDiskManager {
 
     public void insertString(String str) {
         //System.out.println("Insert string " + str + " at (" + pointPos.Page + "," + pointPos.Offset + "), length is: " + str.getBytes().length);
-        if (str.getBytes().length > byteBuffer.remaining()) {
-            // split into 2 substring and insert into page respectively
-            Pair<byte[], byte[]> byteP = splitStringToByte(byteBuffer.remaining(), str);
-
-            // allocate two byte array
-            allocateBytePair(byteP);
-        } else {
-            byte[] byteStr = str.getBytes();
-            byteBuffer.put(byteStr);
-            pointPos.Offset += byteStr.length;
-        }
+//        if (str.getBytes().length > byteBuffer.remaining()) {
+//            // split into 2 substring and insert into page respectively
+//            Pair<byte[], byte[]> byteP = splitStringToByte(byteBuffer.remaining(), str);
+//
+//            // allocate two byte array
+//            allocateBytePair(byteP);
+//        } else {
+//            byte[] byteStr = str.getBytes();
+//            byteBuffer.put(byteStr);
+//            pointPos.Offset += byteStr.length;
+//        }
+        byte[] byteStr = str.getBytes();
+        dictByteBuffer.put(byteStr);
     }
 
     public void insertShort(short sh) {
         //System.out.println("Insert short " + sh + " at (" + pointPos.Page + "," + pointPos.Offset + "), length is: 2");
-        if (Short.BYTES > byteBuffer.remaining()) {
-            // split into 2 substring and insert into page respectively
-            Pair<byte[], byte[]> byteP = splitShortToByte(byteBuffer.remaining(), sh);
+//        if (Short.BYTES > byteBuffer.remaining()) {
+//            // split into 2 substring and insert into page respectively
+//            Pair<byte[], byte[]> byteP = splitShortToByte(byteBuffer.remaining(), sh);
+//
+//            // allocate two byte array
+//            allocateBytePair(byteP);
+//        } else {
+//            byteBuffer.putShort(sh);
+//            pointPos.Offset += Short.BYTES;
+//        }
 
-            // allocate two byte array
-            allocateBytePair(byteP);
-        } else {
-            byteBuffer.putShort(sh);
-            pointPos.Offset += Short.BYTES;
-        }
+        dictByteBuffer.putShort(sh);
     }
 
-    public void insertInteger(int i) {
+    public void insertInteger(int i, WriteToWhere writeWhere) {
         //System.out.println("Insert integer " + i + " at (" + pointPos.Page + "," + pointPos.Offset + "), length is: 4");
-        if (Integer.BYTES > byteBuffer.remaining()) {
-            // split into 2 substring and insert into page respectively
-            Pair<byte[], byte[]> byteP = splitIntegerToByte(byteBuffer.remaining(), i);
+        if(writeWhere == WriteToWhere.To_Poisting_List){
+            if (Integer.BYTES > byteBuffer.remaining()) {
+                // split into 2 substring and insert into page respectively
+                Pair<byte[], byte[]> byteP = splitIntegerToByte(byteBuffer.remaining(), i);
 
-            // allocate two byte array
-            allocateBytePair(byteP);
-        } else {
-            byteBuffer.putInt(i);
-            pointPos.Offset += Integer.BYTES;
+                // allocate two byte array
+                allocateBytePair(byteP);
+            } else {
+                byteBuffer.putInt(i);
+                pointPos.Offset += Integer.BYTES;
+            }
+        }
+        else{
+            dictByteBuffer.putInt(i);
         }
     }
 
@@ -298,16 +344,21 @@ public class SegmentInDiskManager {
         byteBuffer.put(byteP.getKey());
 
         // append page and update point position
-        pfc.appendPage(byteBuffer);
+        pfc_posting.appendPage(byteBuffer);
         pointPos.Page += 1;
         pointPos.Offset = 0;
 
         // insert
         byteBuffer.clear();
-        byteBuffer = ByteBuffer.allocate(pfc.PAGE_SIZE);
+        byteBuffer = ByteBuffer.allocate(pfc_posting.PAGE_SIZE);
 
         byteBuffer.put(byteP.getValue());
         pointPos.Offset += byteP.getValue().length;
+    }
+
+
+    public void allocateByteBuffer(int totalLength, int map_size){
+        dictByteBuffer = ByteBuffer.allocate(Short.BYTES * 2 + totalLength + Integer.BYTES + map_size * SLOT_SIZE);
     }
 
 
@@ -315,11 +366,11 @@ public class SegmentInDiskManager {
     public void allocateKeywordStart(int totalLengthKeyword) {
         int totalLengthKeyWord = totalLengthKeyword + Integer.BYTES;
 
-        byteBuffer.putShort((short) (totalLengthKeyWord / pfc.PAGE_SIZE));
-        byteBuffer.putShort((short) (totalLengthKeyWord % pfc.PAGE_SIZE));
+        dictByteBuffer.putShort((short) (totalLengthKeyWord / pfc_dict.PAGE_SIZE));
+        dictByteBuffer.putShort((short) (totalLengthKeyWord % pfc_dict.PAGE_SIZE));
 
 
-        pointPos.Offset += Integer.BYTES;
+        //pointPos.Offset += Integer.BYTES;  ####
         //System.out.println("====== Keyword initial position is: " + pointPos.Page + ' ' + pointPos.Offset + " ====== ");
     }
 
@@ -327,18 +378,18 @@ public class SegmentInDiskManager {
     public void allocateNumberOfKeyWord(int szKeyword) {
         //System.out.println("====== Dictionary initial position is: " + pointPos.Page + ' ' + pointPos.Offset + " ====== ");
 
-        insertInteger(szKeyword);
+        insertInteger(szKeyword, WriteToWhere.To_Dictionary_File);
 
         // assign docID Position
 
-        retrieveLocation(pointPos,  SLOT_SIZE * szKeyword, docIDPos);
+        //retrieveLocation(pointPos,  SLOT_SIZE * szKeyword, docIDPos); ####
 
         //System.out.println("====== Doc Id initial position is: " + docIDPos.Page + ' ' + docIDPos.Offset + " ====== ");
 
     }
 
     public boolean hasKeyWord() {
-        return !(pointPos.Page == docIDPos.Page && pointPos.Offset == docIDPos.Offset);
+        return !(pointPos.Page == dictEndPos.Page && pointPos.Offset == dictEndPos.Offset);
     }
 
 
@@ -349,18 +400,23 @@ public class SegmentInDiskManager {
      */
     public void retrieveLocation(Location loc, int shift, Location loc2) {
         // transfer to byte-oriented distance instead of using page
-        long dis = loc.Page * pfc.PAGE_SIZE + loc.Offset + shift;
+        long dis = loc.Page * pfc_dict.PAGE_SIZE + loc.Offset + shift;
 
-        loc2.Page = (short) (dis / pfc.PAGE_SIZE);
-        loc2.Offset = (short) (dis % pfc.PAGE_SIZE);
+        loc2.Page = (short) (dis / pfc_dict.PAGE_SIZE);
+        loc2.Offset = (short) (dis % pfc_dict.PAGE_SIZE);
     }
 
     public void appendPage() {
-        pfc.appendPage(byteBuffer);
+        pfc_posting.appendPage(byteBuffer);
+    }
+
+    public void appendAllbyte(){
+        pfc_dict.appendAllBytes(dictByteBuffer);
     }
 
     public void close() {
-        pfc.close();
+        pfc_dict.close();
+        pfc_posting.close();
     }
 
 }
