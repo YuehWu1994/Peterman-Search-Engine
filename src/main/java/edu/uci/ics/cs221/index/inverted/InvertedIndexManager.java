@@ -147,7 +147,7 @@ public class InvertedIndexManager {
         }
         else
         {
-            mapDB = MapdbDocStore.createOrOpen(idxFolder + "DocStore_" + NUM_SEQ);
+            // mapDB = MapdbDocStore.createOrOpen(idxFolder + "DocStore_" + NUM_SEQ);
             document_Counter = (int)mapDB.size();
         }
 
