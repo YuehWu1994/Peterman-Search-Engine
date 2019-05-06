@@ -22,23 +22,7 @@ public class InvertedIndexDeletionTest {
     private String path = "./index/Team12DeleteTest";
     private Analyzer analyzer = new ComposableAnalyzer(new PunctuationTokenizer(), new PorterStemmer());
     private InvertedIndexManager invertedList;
-    Document[] documents = new Document[] {
-            new Document("Thanks to English, you will be able to talk with people who don’t speak your native language."),
-            new Document("Conversing (talking) with others in English opens up a whole new world of opportunities."),
-            new Document("Talking in English will also be adventurous because you will probably feel a little nervous and excited."),
-            new Document("But if you push your English speaking comfort zone and just open your mouth"),
-            new Document("you will feel so accomplished (proud) and motivated to keep learning!"),
-            new Document("Plus, your English will improve a lot if you have more conversations"),
-            new Document("So let’s get started! To help you on this trip."),
-            new Document("We have put together a friendly guide to English conversation for beginners."),
-            new Document("I've started a new diet with vegetables and I've had a terrible week."),
-            new Document("filled with useful, basic phrases—from greetings and small talk to saying goodbye—that will take you on your first conversation adventure."),
-            new Document("If you need a push to start having conversations in English, watch the clip below for motivation."),
-            new Document("It may be an informal conversation with a friend or an acquaintance."),
-            new Document("Or you may use a more formal dialogue when having an English conversation with a colleague."),
-            new Document("Let’s start with informal greetings. Here is how you can say hello"),
-            new Document("Remember that “good night” normally means that you are saying goodbye. It is also commonly used right before going to bed."),
-            new Document("What if you have never met the person you are talking to before?")};
+
     public void setUp() {
         File directory = new File(path);
         if (!directory.exists()) {
@@ -226,10 +210,27 @@ public class InvertedIndexDeletionTest {
             directory.mkdirs();
         }
         invertedList = InvertedIndexManager.createOrOpen(path, analyzer);
-        for (int i = 0; i < documents.length; ++i) {
-            invertedList.addDocument(documents[i]);
-            invertedList.flush();
-        }
+        invertedList.addDocument(new Document("Thanks to English, you will be able to talk with people who don’t speak your native language."));
+        invertedList.addDocument(new Document("Conversing (talking) with others in English opens up a whole new world of opportunities."));
+        invertedList.addDocument(new Document("Talking in English will also be adventurous because you will probably feel a little nervous and excited."));
+        invertedList.addDocument(new Document("But if you push your English speaking comfort zone and just open your mouth"));
+        invertedList.flush();
+        invertedList.addDocument(new Document("you will feel so accomplished (proud) and motivated to keep learning!"));
+        invertedList.addDocument(new Document("Plus, your English will improve a lot if you have more conversations"));
+        invertedList.addDocument(new Document("So let’s get started! To help you on this trip."));
+        invertedList.addDocument(new Document("We have put together a friendly guide to English conversation for beginners."));
+        invertedList.flush();
+        invertedList.addDocument(new Document("I've started a new diet with vegetables and I've had a terrible week."));
+        invertedList.addDocument(new Document("filled with useful, basic phrases—from greetings and small talk to saying goodbye—that will take you on your first conversation adventure."));
+        invertedList.addDocument(new Document("If you need a push to start having conversations in English, watch the clip below for motivation."));
+        invertedList.addDocument(new Document("It may be an informal conversation with a friend or an acquaintance."));
+        invertedList.flush();
+        invertedList.addDocument(new Document("Or you may use a more formal dialogue when having an English conversation with a colleague."));
+        invertedList.addDocument(new Document("Let’s start with informal greetings. Here is how you can say hello"));
+        invertedList.addDocument(new Document("Remember that “good night” normally means that you are saying goodbye. It is also commonly used right before going to bed."));
+        invertedList.addDocument(new Document("What if you have never met the person you are talking to before?"));
+        invertedList.flush();
+
 
         invertedList.deleteDocuments("accomplish");
         invertedList.deleteDocuments("friendli");
