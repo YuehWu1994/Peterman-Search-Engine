@@ -115,7 +115,14 @@ public class InvertedIndexManager {
             throw new UncheckedIOException(e);
         }
     }
-
+    /**
+     * Creates a positional index with the given folder, analyzer, and the compressor.
+     * Compressor must be used to compress the inverted lists and the position lists.
+     *
+     */
+    public static InvertedIndexManager createOrOpenPositional(String indexFolder, Analyzer analyzer, Compressor compressor) {
+        throw new UnsupportedOperationException();
+    }
     /**
      * Adds a document to the inverted index.
      * Document should live in a in-memory buffer until `flush()` is called to write the segment to disk.
@@ -324,7 +331,21 @@ public class InvertedIndexManager {
         }
         return searchKewords(Lists.newArrayList(words), SearchOperation.OR_SEARCH);
     }
+    /**
+     * Performs a phrase search on a positional index.
+     * Phrase search means the document must contain the consecutive sequence of keywords in exact order.
+     *
+     * You could assume the analyzer won't convert each keyword into multiple tokens.
+     * Throws UnsupportedOperationException if the inverted index is not a positional index.
+     *
+     * @param phrase, a consecutive sequence of keywords
+     * @return a iterator of documents matching the query
+     */
+    public Iterator<Document> searchPhraseQuery(List<String> phrase) {
+        Preconditions.checkNotNull(phrase);
 
+        throw new UnsupportedOperationException();
+    }
     /**
      * Iterates through all the documents in all disk segments.
      */
