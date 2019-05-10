@@ -3,7 +3,6 @@ package edu.uci.ics.cs221.index.inverted;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
-import com.sun.tools.javac.util.ArrayUtils;
 import edu.uci.ics.cs221.analysis.Analyzer;
 import edu.uci.ics.cs221.storage.DocumentStore;
 import edu.uci.ics.cs221.storage.MapdbDocStore;
@@ -18,6 +17,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.ArrayList;
 import java.io.File;
+import java.util.stream.Collectors;
 
 
 /**
@@ -115,7 +115,14 @@ public class InvertedIndexManager {
             throw new UncheckedIOException(e);
         }
     }
-
+    /**
+     * Creates a positional index with the given folder, analyzer, and the compressor.
+     * Compressor must be used to compress the inverted lists and the position lists.
+     *
+     */
+    public static InvertedIndexManager createOrOpenPositional(String indexFolder, Analyzer analyzer, Compressor compressor) {
+        throw new UnsupportedOperationException();
+    }
     /**
      * Adds a document to the inverted index.
      * Document should live in a in-memory buffer until `flush()` is called to write the segment to disk.
@@ -144,11 +151,6 @@ public class InvertedIndexManager {
         File f = new File(idxFolder + "DocStore_" + NUM_SEQ);
         if (!f.exists()) {
             mapDB = MapdbDocStore.createOrOpen(idxFolder + "DocStore_" + NUM_SEQ);
-        }
-        else
-        {
-            mapDB = MapdbDocStore.createOrOpen(idxFolder + "DocStore_" + NUM_SEQ);
-            document_Counter = (int)mapDB.size();
         }
 
         mapDB.addDocument(document_Counter, document);
@@ -240,6 +242,7 @@ public class InvertedIndexManager {
                         file.delete();
                         file = new File(getDeletedFile(i).getPath());
                         file.delete();
+                        deletedDocs2 = null;
                         continue;
                     }
                 }
@@ -261,6 +264,7 @@ public class InvertedIndexManager {
                         file.delete();
                         file = new File(getDeletedFile(i).getPath());
                         file.delete();
+                        deletedDocs1 = null;
                         continue;
                     }
                 }
@@ -328,7 +332,21 @@ public class InvertedIndexManager {
         }
         return searchKewords(Lists.newArrayList(words), SearchOperation.OR_SEARCH);
     }
+    /**
+     * Performs a phrase search on a positional index.
+     * Phrase search means the document must contain the consecutive sequence of keywords in exact order.
+     *
+     * You could assume the analyzer won't convert each keyword into multiple tokens.
+     * Throws UnsupportedOperationException if the inverted index is not a positional index.
+     *
+     * @param phrase, a consecutive sequence of keywords
+     * @return a iterator of documents matching the query
+     */
+    public Iterator<Document> searchPhraseQuery(List<String> phrase) {
+        Preconditions.checkNotNull(phrase);
 
+        throw new UnsupportedOperationException();
+    }
     /**
      * Iterates through all the documents in all disk segments.
      */
@@ -359,15 +377,46 @@ public class InvertedIndexManager {
                 List<Integer> postingList = searchSegment(files[i].getName().substring(8), keywords.get(0));
                 if (!postingList.isEmpty()) {
                     //name deleted file delete_segment#_number of documents to be deleted
-                    //if 
-                    Path pfcPath = Paths.get(idxFolder + "deleted_" + i + "-" + postingList.size());
-                    PageFileChannel pfc = PageFileChannel.createOrOpen(pfcPath);
-                    ByteBuffer bb = ByteBuffer.allocate(postingList.size() * Integer.BYTES);
-                    for (int j = 0; j < postingList.size(); j++) {
-                        bb.putInt(postingList.get(j));
+                    File file = getDeletedFile(i);
+                    ByteBuffer bb;
+                    ByteBuffer extraPages = null;
+                    int listLength = 0;
+                    PageFileChannel pfc;
+                    if (file != null) {
+                        //get length and rename file
+                        listLength = Integer.parseInt(file.getName().substring(file.getName().indexOf("-") + 1));
+                        pfc = PageFileChannel.createOrOpen(file.toPath());
+                        bb = pfc.readAllPages();
+                        bb.position(listLength - 1);
+                        if (bb.remaining() < (postingList.size() * Integer.BYTES)){
+                           extraPages = ByteBuffer.allocate((listLength + postingList.size()) * Integer.BYTES);
+                           extraPages.put(bb);
+                        }
+                        pfc.close();
+                    } else {
+                        bb = ByteBuffer.allocate(postingList.size() * Integer.BYTES);
                     }
-                    pfc.appendAllBytes(bb);
+                    listLength += postingList.size();
+                    Path pfcPath = Paths.get(idxFolder + "deleted_" + i + "-" + listLength);
+                    pfc = PageFileChannel.createOrOpen(pfcPath);
+                    for (int j = 0; j < postingList.size(); j++) {
+                        if(extraPages != null){
+                            extraPages.putInt(postingList.get(j));
+                        }
+                        else {
+                            bb.putInt(postingList.get(j));
+                        }
+                    }
+                    if(extraPages != null){
+                        pfc.appendAllBytes(extraPages);
+                    }
+                    else {
+                        pfc.appendAllBytes(bb);
+                    }
                     pfc.close();
+                    if (file != null) {
+                        file.delete();
+                    }
                 }
             }
         }
@@ -485,21 +534,17 @@ public class InvertedIndexManager {
 
         Iterator<Integer> docId1 = mapDB1.keyIterator();
         int docID = 0;
-        while(docId1.hasNext())
-        {
+        while (docId1.hasNext()) {
             docID = docId1.next();
-            if(deletedDocs1 != null && contains(deletedDocs1, docID))
-            {
+            if (deletedDocs1 != null && contains(deletedDocs1, docID)) {
                 continue;
             }
             mapdbmerged.addDocument(docID, mapDB1.getDocument(docID));
         }
         Iterator<Integer> docId2 = mapDB2.keyIterator();
-        while(docId2.hasNext())
-        {
+        while (docId2.hasNext()) {
             docID = docId2.next();
-            if(deletedDocs2 != null && contains(deletedDocs2, docID))
-            {
+            if (deletedDocs2 != null && contains(deletedDocs2, docID)) {
                 continue;
             }
             mapdbmerged.addDocument(docID + sz1, mapDB2.getDocument(docID));
@@ -614,37 +659,34 @@ public class InvertedIndexManager {
         if (v.size() == 8) {
             docIdList1 = segMgr1.readDocIdList(v.get(1), v.get(2), v.get(3));
             docIdList2 = segMgr2.readDocIdList(v.get(5), v.get(6), v.get(7));
-            if(deletedDocs1 != null){
+            if (deletedDocs1 != null) {
                 v.set(3, docIdList1.size() - deletedDocs1.length);
             }
-            if(deletedDocs2 != null){
+            if (deletedDocs2 != null) {
                 v.set(7, docIdList2.size() - deletedDocs2.length);
             }
         } else {
             // exist in either  1st/2nd segment
             if (v.get(0) == 0) {
                 docIdList1 = segMgr1.readDocIdList(v.get(1), v.get(2), v.get(3));
-                if(deletedDocs1 != null){
+                if (deletedDocs1 != null) {
                     v.set(3, docIdList1.size() - deletedDocs1.length);
                 }
-            }
-            else {
+            } else {
                 docIdList2 = segMgr2.readDocIdList(v.get(1), v.get(2), v.get(3));
-                if(deletedDocs2 != null){
+                if (deletedDocs2 != null) {
                     v.set(3, docIdList2.size() - deletedDocs2.length);
                 }
             }
         }
 
         //compare with deleted list if deleted then don't insert it and change the metadata of the slot
-        if(deletedDocs1 != null)
-        {
-            docIdList1.removeAll(Arrays.asList(deletedDocs1));
+        if (deletedDocs1 != null) {
+            docIdList1.removeAll(Arrays.stream(deletedDocs1).boxed().collect(Collectors.toList()));
         }
 
-        if(deletedDocs2 != null)
-        {
-            docIdList2.removeAll(Arrays.asList(deletedDocs2));
+        if (deletedDocs2 != null) {
+            docIdList2.removeAll(Arrays.stream(deletedDocs2).boxed().collect(Collectors.toList()));
         }
         // convert docId in segment 2
         for (int i = 0; i < docIdList2.size(); ++i) {
@@ -696,13 +738,13 @@ public class InvertedIndexManager {
 
         f1 = getDeletedFile(id1);
         // delete 1st deleted
-        if(f1 != null) {
+        if (f1 != null) {
             f1.delete();
         }
 
         f2 = getDeletedFile(id2);
         // delete 2nd deleted
-        if(f2 != null) {
+        if (f2 != null) {
             f2.delete();
         }
 
@@ -780,7 +822,7 @@ public class InvertedIndexManager {
         File file = getDeletedFile(segmentNumber);
         PageFileChannel pfc = PageFileChannel.createOrOpen(file.toPath());
         ByteBuffer bb = pfc.readAllPages();
-        int listLength = Integer.parseInt(file.getName().substring(file.getName().indexOf("-")+1));
+        int listLength = Integer.parseInt(file.getName().substring(file.getName().indexOf("-") + 1));
         deletedDocs = new int[listLength];
         bb.position(0);
         for (int j = 0; j < deletedDocs.length; j++) {
@@ -789,11 +831,11 @@ public class InvertedIndexManager {
         return deletedDocs;
     }
 
-    private File getDeletedFile(int segmentNumber){
+    private File getDeletedFile(int segmentNumber) {
         File file = null;
         File dir = new File(idxFolder);
         File[] files = dir.listFiles((d, name) -> name.startsWith("deleted_" + segmentNumber + "-"));
-        if(files.length >= 1){
+        if (files.length >= 1) {
             file = files[0];
         }
         return file;
