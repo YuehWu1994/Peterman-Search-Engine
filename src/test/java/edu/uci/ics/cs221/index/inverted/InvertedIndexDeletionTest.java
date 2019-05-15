@@ -204,7 +204,7 @@ public class InvertedIndexDeletionTest {
         Assert.assertEquals(4, numOfDocs);
     }
 
-    @Test public void test() {
+    /*@Test public void test() {
         File directory = new File(path);
         if (!directory.exists()) {
             directory.mkdirs();
@@ -251,6 +251,7 @@ public class InvertedIndexDeletionTest {
         assert invertedLists.get("convers").size() == 5;
         assert invertedLists.get("english").size() == 7;
     }
+     */
     @After
 
     public void deleteTmp() {
