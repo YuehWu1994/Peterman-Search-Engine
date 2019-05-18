@@ -15,8 +15,6 @@ public class DeltaVarLenCompressor implements Compressor {
     @Override
     public byte[] encode(List<Integer> integers) {
 
-        //throw new UnsupportedOperationException();
-
         int n = integers.size(), prev = 0;
         ByteArrayOutputStream res = new ByteArrayOutputStream();
 
@@ -101,26 +99,5 @@ public class DeltaVarLenCompressor implements Compressor {
 
         return b; // not sure
     }
-
-
-
-
-    // original integer to -> difference
-    // integer(difference) to bytes array
-        // represent integer in binary    https://stackoverflow.com/questions/2473597/bitset-to-and-from-integer-long
-        // delta encoding and variable-length encoding   https://stackoverflow.com/questions/2473597/bitset-to-and-from-integer-long
-        // store in bytes array  https://www.programcreek.com/java-api-examples/?class=java.util.BitSet&method=toByteArray
-
-
-
-
-    // bytes array to integer(difference)
-        // extract range 1, 1, .... 0  https://stackoverflow.com/questions/9354860/how-to-get-the-value-of-a-bit-at-a-certain-position-from-a-byte
-                                        // byte <-> integer https://way2java.com/casting-operations/java-byte-to-int/
-        // concat bits (might not use)
-        // transform to integer
-    // original integer + difference
-
-
 
 }
