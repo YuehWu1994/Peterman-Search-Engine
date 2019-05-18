@@ -54,7 +54,8 @@ public class Team12PhraseSearchTest {
         phrase.add("of");
         phrase.add("California");
         phrase.add("Irvine");
-        Iterator<Document> iterator = invertedIndex.searchPhraseQuery(phrase);
+        //Iterator<Document> iterator = invertedIndex.searchOrQuery(phrase); 
+        Iterator<Document> iterator = invertedIndex.searchPhraseQuery(phrase); // should it be searchPhraseQuery() ?
         assertFalse(iterator.hasNext());
     }
 
@@ -81,7 +82,8 @@ public class Team12PhraseSearchTest {
         phrase.add("of");
         phrase.add(",California");
         phrase.add("Irvine");
-        Iterator<Document> iterator = invertedIndex.searchPhraseQuery(phrase);
+        //Iterator<Document> iterator = invertedIndex.searchOrQuery(phrase);
+        Iterator<Document> iterator = invertedIndex.searchPhraseQuery(phrase); // should it be searchPhraseQuery() ?
         int counter = 0;
         while (iterator.hasNext()) {
             String text = iterator.next().getText();
@@ -114,7 +116,8 @@ public class Team12PhraseSearchTest {
         phrase.add("of");
         phrase.add("California");
         phrase.add("Irvine");
-        Iterator<Document> iterator = invertedIndex.searchPhraseQuery(phrase);
+        //Iterator<Document> iterator = invertedIndex.searchOrQuery(phrase);
+        Iterator<Document> iterator = invertedIndex.searchPhraseQuery(phrase); // should it be searchPhraseQuery() ?
 
     }
 
@@ -123,19 +126,19 @@ public class Team12PhraseSearchTest {
      */
     @Test
     public void test5() {
-        invertedIndex = InvertedIndexManager.createOrOpenPositional(path, analyzer, compressor);
+        invertedIndex = InvertedIndexManager.createOrOpen(path, analyzer);
         Document doc = new Document("The University of California, Irvine is a public research university" +
                 " located in Irvine, California.");
 
-        for (int i = 0; i < 16; ++i) {
+        for(int i = 0; i < 16; ++i){
             invertedIndex.addDocument(doc);
             invertedIndex.flush();
         }
-
+        
         while (invertedIndex.getNumSegments() != 1) {
             invertedIndex.mergeAllSegments();
         }
-
+        
         List<String> phrase = new ArrayList<>();
         phrase.add("University");
         phrase.add("of");
@@ -150,6 +153,7 @@ public class Team12PhraseSearchTest {
         }
         assertEquals(16, counter);
     }
+
 
 
     @After
