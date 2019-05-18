@@ -114,15 +114,16 @@ public class InvertedIndexManager {
             throw new UncheckedIOException(e);
         }
     }
+
     /**
      * Creates a positional index with the given folder, analyzer, and the compressor.
      * Compressor must be used to compress the inverted lists and the position lists.
-     *
      */
     public static InvertedIndexManager createOrOpenPositional(String indexFolder, Analyzer analyzer, Compressor compressor) {
         iiCompressor = compressor;
         return createOrOpen(indexFolder, analyzer);
     }
+
     /**
      * Adds a document to the inverted index.
      * Document should live in a in-memory buffer until `flush()` is called to write the segment to disk.
@@ -140,7 +141,7 @@ public class InvertedIndexManager {
                 totalLengthKeyword += w.getBytes().length;
             }
             positions = keyWordMap.get(w, document_Counter);
-            if(positions == null) {
+            if (positions == null) {
                 positions = new ArrayList<>();
             }
             positions.add(wordPosition++);
@@ -164,7 +165,7 @@ public class InvertedIndexManager {
         }
 
         if (NUM_SEQ == DEFAULT_MERGE_THRESHOLD) {
-            //mergeAllSegments();
+            mergeAllSegments();
         }
     }
 
@@ -199,13 +200,13 @@ public class InvertedIndexManager {
             segMgr.insertMetaDataSlot(entry.getKey().getBytes().length, encodedPostingList.length);
             segMgr.insertPostingList(encodedPostingList);
             //iterate through every documentID and get the position list
-            if(isPositionalIndex()) {
+            if (isPositionalIndex()) {
                 for (Map.Entry<Integer, List<Integer>> docId : entry.getValue().entrySet()) {
-                byte[] encodedPositionList;
-                encodedPositionList = iiCompressor.encode(docId.getValue());
-                segMgr.insertPositionList(encodedPositionList);
+                    byte[] encodedPositionList;
+                    encodedPositionList = iiCompressor.encode(docId.getValue());
+                    segMgr.insertPositionList(encodedPositionList);
+                }
             }
-        }
 
         }
 
@@ -229,15 +230,12 @@ public class InvertedIndexManager {
     public void mergeAllSegments() {
         // merge only happens at even number of segments
         Preconditions.checkArgument(getNumSegments() % 2 == 0);
-    }/*
         String seg1 = "";
-        File file;
         File[] files = getFiles("segment");
 
         sort(files);
 
         for (int i = 0; i < files.length; ++i) {
-            String fileName = files[i].getName().replace("segment", "deleted");
             if (seg1 != "") {
                 // merge
                 merge(Integer.parseInt(seg1.substring(8)), Integer.parseInt(files[i].getName().substring(8)));
@@ -309,10 +307,11 @@ public class InvertedIndexManager {
         }
         return searchKewords(Lists.newArrayList(words), SearchOperation.OR_SEARCH);
     }
+
     /**
      * Performs a phrase search on a positional index.
      * Phrase search means the document must contain the consecutive sequence of keywords in exact order.
-     *
+     * <p>
      * You could assume the analyzer won't convert each keyword into multiple tokens.
      * Throws UnsupportedOperationException if the inverted index is not a positional index.
      *
@@ -324,6 +323,7 @@ public class InvertedIndexManager {
 
         throw new UnsupportedOperationException();
     }
+
     /**
      * Iterates through all the documents in all disk segments.
      */
@@ -421,7 +421,7 @@ public class InvertedIndexManager {
     /**
      * Reads a disk segment of a positional index into memory based on segmentNum.
      * This function is mainly used for checking correctness in test cases.
-     *
+     * <p>
      * Throws UnsupportedOperationException if the inverted index is not a positional index.
      *
      * @param segmentNum n-th segment in the inverted index (start from 0).
@@ -483,7 +483,7 @@ public class InvertedIndexManager {
     /**
      * ================HELPER FUNCTIONS==================
      */
-   /* private void merge(int id1, int id2) {
+    private void merge(int id1, int id2) {
         // get segment id and docId size
         int sz1;
 
@@ -499,7 +499,7 @@ public class InvertedIndexManager {
          * Specification of value at Map : segId(either 0,1) | page | offset | length  , stored at List of integer
          * If the keyword exist in both segments, the list would have two dictionary (8 attribute)
          */
-        /*Map<String, List<Integer>> mergedMap = new TreeMap<>();
+        Map<String, List<Integer>> mergedMap = new TreeMap<>();
 
         SegmentInDiskManager segMgr1 = new SegmentInDiskManager(idxFolder, Integer.toString(id1), iiCompressor);
         SegmentInDiskManager segMgr2 = new SegmentInDiskManager(idxFolder, Integer.toString(id2), iiCompressor);
@@ -604,35 +604,49 @@ public class InvertedIndexManager {
         segMgr1.readPostingInitiate();
         segMgr2.readPostingInitiate();
 
-        if(isPositionalIndex()){
+        if (isPositionalIndex()) {
             segMgr1.readPositionInitiate();
             segMgr2.readPositionInitiate();
+            segMgr1.readPositionMetaInitiate();
+            segMgr2.readPositionMetaInitiate();
         }
 
-
+        int[] lst1Sz = new int[1];
         for (Map.Entry<String, List<Integer>> entry : mergedMap.entrySet()) {
 
             // extract docIdList
-            Map<Integer, List<Integer>> docIdList = extractDocList(entry.getValue(), segMgr1, segMgr2, sz1);
+            Map<Integer, List<Integer>> docIdList = extractDocList(lst1Sz, entry.getValue(), segMgr1, segMgr2, sz1);
 
-
+            byte[] encodedPostingList;
+            if (isPositionalIndex()) {
+                encodedPostingList = iiCompressor.encode(docIdList.keySet().stream().collect(Collectors.toCollection(ArrayList::new)));
+            } else {
+                encodedPostingList = new NaiveCompressor().encode(docIdList.keySet().stream().collect(Collectors.toCollection(ArrayList::new)));
+            }
             // insert segment
             segMgrMerge.insertKeyWord(entry.getKey());
-            int docIdLength = entry.getValue().get(3);
-            // if this key word exists in both segments
-            if (entry.getValue().size() == 8) docIdLength += entry.getValue().get(7);
+            int docIdLength = encodedPostingList.length;
 
             segMgrMerge.insertMetaDataSlot(entry.getKey().getBytes().length, docIdLength);
-            for(Map.Entry<Integer, List<Integer>> docId : docIdList.entrySet()) {
-                //todo extract metadata list of positional list of both segments
-                //then insert it in merged
-                //change to read single docID and its pos list
-                if(isPositionalIndex()){
-                segMgrMerge.insertListOfDocID(docId.getKey(), segMgrMerge.readPosList(docId.getValue().get(0),
-                        docId.getValue().get(1), docId.getValue().get(2)));
-                }
-                else{
-                    segMgrMerge.insertListOfDocID(docId.getKey(), new ArrayList<>());
+
+
+            segMgrMerge.insertPostingList(encodedPostingList);
+
+            if (isPositionalIndex()) {
+                int counter = 0;
+                for (Map.Entry<Integer, List<Integer>> docId : docIdList.entrySet()) {
+                    List<Integer> positionalList;
+                    if (counter < lst1Sz[0]) {
+                        positionalList = segMgr1.readPosList(docId.getValue().get(0),
+                                docId.getValue().get(1), docId.getValue().get(2));
+                    } else {
+                        positionalList = segMgr2.readPosList(docId.getValue().get(0),
+                                docId.getValue().get(1), docId.getValue().get(2));
+                    }
+                    counter++;
+                    byte[] encodedPositionList;
+                    encodedPositionList = iiCompressor.encode(positionalList);
+                    segMgrMerge.insertPositionList(encodedPositionList);
                 }
             }
         }
@@ -649,12 +663,10 @@ public class InvertedIndexManager {
     }
 
     /**
-    Return list of document IDs along with their postingList location
+     * Return list of document IDs along with their postingList location
      */
-   /* private Map<Integer, List<Integer>> extractDocList(List<Integer> v, SegmentInDiskManager segMgr1, SegmentInDiskManager segMgr2, int sz1) {
+    private Map<Integer, List<Integer>> extractDocList(int[] list1Sz, List<Integer> v, SegmentInDiskManager segMgr1, SegmentInDiskManager segMgr2, int sz1) {
         Map<Integer, List<Integer>> docIdList1 = new TreeMap<>(), docIdList2 = new TreeMap<>();
-
-
         // the keyword exist in both segments
         if (v.size() == 8) {
             docIdList1 = segMgr1.readDocIdList(v.get(1), v.get(2), v.get(3));
@@ -668,15 +680,17 @@ public class InvertedIndexManager {
                 docIdList2 = segMgr2.readDocIdList(v.get(1), v.get(2), v.get(3));
             }
         }
+
+        list1Sz[0] = docIdList1.keySet().size();
         // convert docId in segment 2
-        for(Map.Entry<Integer, List<Integer>> entry : docIdList2.entrySet()) {
-            docIdList1.put(entry.getKey()+sz1, entry.getValue());
+        for (Map.Entry<Integer, List<Integer>> entry : docIdList2.entrySet()) {
+            docIdList1.put(entry.getKey() + sz1, entry.getValue());
         }
 
         // concat docId2 to docId1
         return docIdList1;
     }
-*/
+
     private void deleteAndRename(int id1, int id2) {
         // delete segment
         File f1, f2;
@@ -687,6 +701,16 @@ public class InvertedIndexManager {
 
         f1 = new File(idxFolder + "posting_" + id1);
         f2 = new File(idxFolder + "posting_" + id2);
+        f1.delete();
+        f2.delete();
+
+        f1 = new File(idxFolder + "position_" + id1);
+        f2 = new File(idxFolder + "position_" + id2);
+        f1.delete();
+        f2.delete();
+
+        f1 = new File(idxFolder + "meta_" + id1);
+        f2 = new File(idxFolder + "meta_" + id2);
         f1.delete();
         f2.delete();
 
@@ -703,6 +727,13 @@ public class InvertedIndexManager {
 
         if (!success) throw new UnsupportedOperationException("rename segment fail");
 
+        f1 = new File(idxFolder + "position_mergedSegment");
+        f2 = new File(idxFolder + "position_" + id1 / 2);
+        f1.renameTo(f2);
+
+        f1 = new File(idxFolder + "meta_mergedSegment");
+        f2 = new File(idxFolder + "meta_" + id1 / 2);
+        success = f1.renameTo(f2);
 
         // delete 2nd document store
         f2 = new File(idxFolder + "DocStore_" + id2);
@@ -803,7 +834,7 @@ public class InvertedIndexManager {
         });
     }
 
-    private boolean isPositionalIndex(){
+    private boolean isPositionalIndex() {
         return iiCompressor != null;
     }
 }

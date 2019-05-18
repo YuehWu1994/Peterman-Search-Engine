@@ -75,7 +75,7 @@ public class Team22PositionalMergeTest {
                 if (table.get(tokens.get(i), docID) == null){
                     table.put(tokens.get(i), docID, new ArrayList<>());
                 }
-                table.get(tokens.get(i), docID).add(i+1); // positional idx start from 1
+                table.get(tokens.get(i), docID).add(i); // positional idx start from 0
             }
             docID++; // assume docID always continuous
         }
@@ -223,7 +223,7 @@ public class Team22PositionalMergeTest {
         List<Document> seg2docs = new ArrayList<>();
         for (int i = 0; i < documents.length; i++){
             im.addDocument(documents[i]);
-            if (i < documents.length-1) {
+            if (i < documents.length-2) {
                 seg1docs.add(documents[i]);
             } else {
                 seg2docs.add(documents[i]);
