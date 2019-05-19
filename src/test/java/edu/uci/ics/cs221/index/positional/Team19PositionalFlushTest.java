@@ -41,8 +41,8 @@ public class Team19PositionalFlushTest {
     public void setup() throws Exception {
         Path path = Paths.get(file);
         Files.deleteIfExists(path);
-        iim = iim.createOrOpenPositional(file, an, cp);
-        iim.DEFAULT_FLUSH_THRESHOLD = 3;
+        iim = InvertedIndexManager.createOrOpenPositional(file, an, cp);
+        InvertedIndexManager.DEFAULT_FLUSH_THRESHOLD = 3;
     }
 
     @After
@@ -60,7 +60,7 @@ public class Team19PositionalFlushTest {
         }
         Files.deleteIfExists(Paths.get(file));
 
-        iim.DEFAULT_FLUSH_THRESHOLD = 1000;
+        InvertedIndexManager.DEFAULT_FLUSH_THRESHOLD = 1000;
     }
 
     // test flush when flush() is called automatically, whether the total number of segments is correct

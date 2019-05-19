@@ -73,7 +73,7 @@ public class InvertedIndexManager {
 
     private static Analyzer iiAnalyzer;
 
-    private static Compressor iiCompressor = null;
+    private Compressor iiCompressor;
 
     private enum SearchOperation {
         AND_SEARCH,
@@ -85,6 +85,15 @@ public class InvertedIndexManager {
         document_Counter = 0;
     }
 
+    /**
+     * ADDED THIS CONSTRUCTOR TO SOLVE ISSUE OF STATIC COMPRESSOR
+     * @param indexFolder
+     * @param analyzer
+     */
+    private InvertedIndexManager(String indexFolder, Analyzer analyzer, Compressor compressor) {
+        document_Counter = 0;
+        iiCompressor = compressor;
+    }
     /**
      * Creates an inverted index manager with the folder and an analyzer
      */
@@ -102,13 +111,13 @@ public class InvertedIndexManager {
             Path indexFolderPath = Paths.get(indexFolder);
             if (Files.exists(indexFolderPath) && Files.isDirectory(indexFolderPath)) {
                 if (Files.isDirectory(indexFolderPath)) {
-                    return new InvertedIndexManager(indexFolder, analyzer);
+                    return new InvertedIndexManager(indexFolder, analyzer, null);
                 } else {
                     throw new RuntimeException(indexFolderPath + " already exists and is not a directory");
                 }
             } else {
                 Files.createDirectories(indexFolderPath);
-                return new InvertedIndexManager(indexFolder, analyzer);
+                return new InvertedIndexManager(indexFolder, analyzer, null);
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -120,8 +129,29 @@ public class InvertedIndexManager {
      * Compressor must be used to compress the inverted lists and the position lists.
      */
     public static InvertedIndexManager createOrOpenPositional(String indexFolder, Analyzer analyzer, Compressor compressor) {
-        iiCompressor = compressor;
-        return createOrOpen(indexFolder, analyzer);
+        try {
+
+            idxFolder = indexFolder + "/";
+            NUM_SEQ = 0;
+            document_Counter = 0;
+            totalLengthKeyword = 0;
+            keyWordMap = TreeBasedTable.create();
+            iiAnalyzer = analyzer;
+
+            Path indexFolderPath = Paths.get(indexFolder);
+            if (Files.exists(indexFolderPath) && Files.isDirectory(indexFolderPath)) {
+                if (Files.isDirectory(indexFolderPath)) {
+                    return new InvertedIndexManager(indexFolder, analyzer, compressor);
+                } else {
+                    throw new RuntimeException(indexFolderPath + " already exists and is not a directory");
+                }
+            } else {
+                Files.createDirectories(indexFolderPath);
+                return new InvertedIndexManager(indexFolder, analyzer, compressor);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     /**
@@ -320,9 +350,80 @@ public class InvertedIndexManager {
      */
     public Iterator<Document> searchPhraseQuery(List<String> phrase) {
         Preconditions.checkNotNull(phrase);
+        List<Document> iterator = new ArrayList<>();
+        if (phrase.isEmpty()) {
+            return iterator.iterator();
+        }
+        if(!isPositionalIndex()){
+            throw new UnsupportedOperationException();
+        }
 
-        throw new UnsupportedOperationException();
+        //concat the list of phrases
+        //do analyzer
+        List<String> keywords = iiAnalyzer.analyze(String.join(" ", phrase));
+        File[] files = getFiles("segment");
+        sort(files);
+        //loop through every segment
+        for (int i = 0; i < files.length; ++i) {
+
+            SegmentInDiskManager segMgr = new SegmentInDiskManager(idxFolder, files[i].getName().substring(8), iiCompressor);
+            segMgr.readInitiate();
+            Map<String, List<Integer>> dictMap = new TreeMap<>();
+            //load all the keywords of the segment
+            while (segMgr.hasKeyWord()) {
+                List<Integer> l1 = new ArrayList<>();
+                String k1 = segMgr.readKeywordAndDict(l1);
+                dictMap.put(k1, l1);
+            }
+            //if keywords in segment doesn't contain query then continue
+            if(!dictMap.keySet().containsAll(keywords)){
+                return iterator.iterator();
+            }
+            //loop through every token from query
+            Map<Integer, List<Integer>> postingList1, postingList2;
+            segMgr.readPostingInitiate();
+            segMgr.readPositionMetaInitiate();
+            segMgr.readPositionInitiate();
+            //get all docs of the token
+            postingList1 = segMgr.readDocIdList(dictMap.get(keywords.get(0)).get(0),
+                    dictMap.get(keywords.get(0)).get(1), dictMap.get(keywords.get(0)).get(2));
+            for(int j = 1; j < keywords.size(); j++) {
+                //inside the loop get the next token from phrase
+                //then get all docs of keyword two
+                postingList2 = segMgr.readDocIdList(dictMap.get(keywords.get(j)).get(0),
+                        dictMap.get(keywords.get(j)).get(1), dictMap.get(keywords.get(j)).get(2));
+                //loop through all docs of keword 1
+                for(Map.Entry<Integer, List<Integer>> entry : postingList1.entrySet())
+                {
+                    //if docid is not found in second keyword then continue
+                    if(!postingList2.containsKey(entry.getKey())){
+                        continue;
+                    }
+                    // else get the positional of both
+                    List<Integer> positionalList1 = segMgr.readPosList(entry.getValue().get(0), entry.getValue().get(1),
+                            entry.getValue().get(2));
+                    List<Integer> positionalList2 = segMgr.readPosList(postingList2.get(entry.getKey()).get(0), postingList2.get(entry.getKey()).get(1),
+                            postingList2.get(entry.getKey()).get(2));
+                    //loop through every position in doc1 of keyword1
+                    int pos  = 0;
+                    boolean found = false;
+                    for(int k = 0; k < positionalList1.size() && pos<positionalList2.size(); k++){
+                        while(pos<positionalList2.size() && positionalList1.get(k) > positionalList2.get(pos)){
+                            pos++;
+                        }
+                        if(positionalList1.get(k) == positionalList2.get(pos) + 1){
+                            found = true;
+                            continue;
+                        }
+                    }
+                }
+                postingList1 = postingList2;
+            }
+        }
+        return iterator.iterator();
+
     }
+
 
     /**
      * Iterates through all the documents in all disk segments.
@@ -775,11 +876,11 @@ public class InvertedIndexManager {
         for (int i = 0; i < files.length; ++i) {
             Set<Integer> postingListset = new TreeSet<>();
             for (int j = 0; j < keywords.size(); j++) {
-                List<Integer> postingList = searchSegment(files[i].getName().substring(8), keywords.get(j));
+                Map<Integer, List<Integer>> postingList = searchSegment(files[i].getName().substring(8), keywords.get(j));//.keySet().stream().collect(Collectors.toCollection(ArrayList::new));
                 if (searchOperation == SearchOperation.AND_SEARCH && j > 0) {
-                    postingListset.retainAll(postingList);
+                    postingListset.retainAll(postingList.keySet());
                 } else {
-                    postingListset.addAll(postingList);
+                    postingListset.addAll(postingList.keySet());
                 }
             }
             if (postingListset.size() >= 1) {
@@ -791,8 +892,8 @@ public class InvertedIndexManager {
         return iterator;
     }
 
-    private List<Integer> searchSegment(String segment, String keyword) {
-        List<Integer> postingList = new ArrayList<>();
+    private Map<Integer, List<Integer>> searchSegment(String segment, String keyword) {
+        Map<Integer, List<Integer>> postingList = new TreeMap<>();
         SegmentInDiskManager segMgr = new SegmentInDiskManager(idxFolder, segment, iiCompressor);
         segMgr.readInitiate();
         Map<String, List<Integer>> dictMap = new TreeMap<>();
@@ -803,9 +904,14 @@ public class InvertedIndexManager {
         }
 
         segMgr.readPostingInitiate();
+        if(isPositionalIndex()){
+            segMgr.readPositionMetaInitiate();
+            segMgr.readPositionInitiate();
+
+        }
         if (dictMap.containsKey(keyword)) {
             postingList = segMgr.readDocIdList(dictMap.get(keyword).get(0),
-                    dictMap.get(keyword).get(1), dictMap.get(keyword).get(2)).keySet().stream().collect(Collectors.toCollection(ArrayList::new));
+                    dictMap.get(keyword).get(1), dictMap.get(keyword).get(2));
         }
         return postingList;
     }

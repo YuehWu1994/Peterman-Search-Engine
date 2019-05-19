@@ -213,6 +213,7 @@ public class SegmentInDiskManager {
 
     public void readPositionMetaInitiate() {
         posMetaByteBuffer = pfc_posMeta.readPage(0);
+        pfc_posMeta.readCounter--;
         metaPos.Page = 0;
         metaPos.Offset = 0;
     }
@@ -336,7 +337,7 @@ public class SegmentInDiskManager {
         if (writeWhere == WriteToWhere.To_Pos_Meta_File) {
             if (metaPos.Page != lc.Page) {
                 bb = pfc_posMeta.readPage(lc.Page);
-
+                pfc_posMeta.readCounter--;
                 metaPos.Page += 1;
                 metaPos.Offset = lc.Offset;
                 posMetaByteBuffer.position(metaPos.Offset);
@@ -367,7 +368,7 @@ public class SegmentInDiskManager {
         if (writeWhere == WriteToWhere.To_Pos_Meta_File) {
             if (metaPos.Page != lc.Page) {
                 bb = pfc_posMeta.readPage(lc.Page);
-
+                pfc_posMeta.readCounter--;
                 metaPos.Page += 1;
                 metaPos.Offset = lc.Offset;
                 posMetaByteBuffer.position(metaPos.Offset);
@@ -432,6 +433,7 @@ do{
             bb = pfc_position.readPage(lc.Page);
         } else {
             bb = pfc_posMeta.readPage(lc.Page);
+            pfc_posMeta.readCounter--;
         }
 
         for (int i = 0; i < subLength; i++) {
@@ -551,6 +553,7 @@ do{
 
             // append page and update point position
             pfc_posMeta.appendPage(posMetaByteBuffer);
+            pfc_posMeta.writeCounter--;
             metaPos.Page += 1;
             metaPos.Offset = 0;
 
@@ -590,6 +593,7 @@ do{
         if (isPositional()) {
             pfc_position.appendPage(positionByteBuffer);
             pfc_posMeta.appendPage(posMetaByteBuffer);
+            pfc_posMeta.writeCounter--;
         }
     }
 

@@ -5,7 +5,10 @@ import com.google.common.collect.TreeBasedTable;
 import edu.uci.ics.cs221.analysis.ComposableAnalyzer;
 import edu.uci.ics.cs221.analysis.PorterStemmer;
 import edu.uci.ics.cs221.analysis.PunctuationTokenizer;
-import edu.uci.ics.cs221.index.inverted.*;
+import edu.uci.ics.cs221.index.inverted.DeltaVarLenCompressor;
+import edu.uci.ics.cs221.index.inverted.InvertedIndexManager;
+import edu.uci.ics.cs221.index.inverted.PageFileChannel;
+import edu.uci.ics.cs221.index.inverted.PositionalIndexSegmentForTest;
 import edu.uci.ics.cs221.storage.Document;
 import org.junit.After;
 import org.junit.Test;
@@ -161,7 +164,9 @@ public class Team20PositionalFlushTest {
 
 
         ComposableAnalyzer analyzer = new ComposableAnalyzer(new PunctuationTokenizer(), new PorterStemmer());
-        InvertedIndexManager ii = InvertedIndexManager.createOrOpen("./index/Team20FlushTest/", analyzer);
+        DeltaVarLenCompressor compressor = new DeltaVarLenCompressor();
+        InvertedIndexManager ii = InvertedIndexManager.createOrOpenPositional(
+                "./index/Team20FlushTest/", analyzer, compressor);
 
         InvertedIndexManager.DEFAULT_FLUSH_THRESHOLD = 2;
         ii.addDocument(d1);
