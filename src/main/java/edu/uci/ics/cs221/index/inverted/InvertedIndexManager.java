@@ -55,12 +55,12 @@ public class InvertedIndexManager {
     /**
      * Number of sequence in disk (for merge)
      */
-    private static int NUM_SEQ;
+    private int NUM_SEQ;
 
     /**
      * Document Counter (for flush)
      */
-    private static Integer document_Counter;
+    private Integer document_Counter;
 
 
     /**
@@ -69,7 +69,7 @@ public class InvertedIndexManager {
     private static Integer totalLengthKeyword;
 
 
-    private static String idxFolder;
+    private String idxFolder;
 
     private static Analyzer iiAnalyzer;
 
@@ -83,6 +83,9 @@ public class InvertedIndexManager {
 
     private InvertedIndexManager(String indexFolder, Analyzer analyzer) {
         document_Counter = 0;
+        idxFolder = indexFolder + "/";
+        NUM_SEQ = 0;
+        document_Counter = 0;
     }
 
     /**
@@ -93,6 +96,9 @@ public class InvertedIndexManager {
     private InvertedIndexManager(String indexFolder, Analyzer analyzer, Compressor compressor) {
         document_Counter = 0;
         iiCompressor = compressor;
+        idxFolder = indexFolder + "/";
+        NUM_SEQ = 0;
+        document_Counter = 0;
     }
     /**
      * Creates an inverted index manager with the folder and an analyzer
@@ -100,10 +106,6 @@ public class InvertedIndexManager {
     public static InvertedIndexManager createOrOpen(String indexFolder, Analyzer analyzer) {
 
         try {
-
-            idxFolder = indexFolder + "/";
-            NUM_SEQ = 0;
-            document_Counter = 0;
             totalLengthKeyword = 0;
             keyWordMap = TreeBasedTable.create();
             iiAnalyzer = analyzer;
@@ -130,10 +132,6 @@ public class InvertedIndexManager {
      */
     public static InvertedIndexManager createOrOpenPositional(String indexFolder, Analyzer analyzer, Compressor compressor) {
         try {
-
-            idxFolder = indexFolder + "/";
-            NUM_SEQ = 0;
-            document_Counter = 0;
             totalLengthKeyword = 0;
             keyWordMap = TreeBasedTable.create();
             iiAnalyzer = analyzer;
@@ -549,6 +547,8 @@ public class InvertedIndexManager {
             String k1 = segMgr.readKeywordAndDict(l1);
             dictMap.put(k1, l1);
         }
+        int compress_wc = PageFileChannel.writeCounter;
+        int compress_rc = PageFileChannel.readCounter;
 
 
         // initiate for reading posting list
@@ -569,6 +569,9 @@ public class InvertedIndexManager {
             }
 
         }
+
+        compress_wc = PageFileChannel.writeCounter;
+        compress_rc = PageFileChannel.readCounter;
         DocumentStore mapDBGetIdx = MapdbDocStore.createOrOpenReadOnly(idxFolder + "DocStore_" + segmentNum);
 
         Iterator<Map.Entry<Integer, Document>> it = mapDBGetIdx.iterator();
