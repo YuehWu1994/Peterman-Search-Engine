@@ -27,8 +27,9 @@ public class SegmentInDiskManager {
     ByteBuffer positionByteBuffer; //used for writing/reading positions
     ByteBuffer posMetaByteBuffer;
 
-    public static int SLOT_SIZE = 12;
-
+    public static int SLOT_SIZE = 16;//added int for also storing number of doc ids per posting list for search
+    private static int POSITION_SLOT_SIZE = 10;
+    private int docIdCount;
     /*
      * Define the location where we point to docID, keyword
      */
@@ -66,6 +67,7 @@ public class SegmentInDiskManager {
         Path path_poisting = Paths.get(folder + "posting_" + seg);
 
         this.compressor = compressor;
+        docIdCount = 0;
         if (isPositional()) {
             Path path_positional = Paths.get(folder + "position_" + seg);
             pfc_position = PageFileChannel.createOrOpen(path_positional);
@@ -136,10 +138,10 @@ public class SegmentInDiskManager {
     }
 
     /*
-     *         4              2            2            4
-     * | keyword length | list page | list offset | list length
+     *         4              2            2            4               4
+     * | keyword length | list page | list offset | list length | position metadata location
      */
-    public void insertMetaDataSlot(int keyLength, int valueLength) {
+    public void insertMetaDataSlot(int keyLength, int valueLength, int numberOfDocs) {
         // point
         dictByteBuffer.position(nextDictPos);
         insertInteger(keyLength, WriteToWhere.To_Dictionary_File);
@@ -149,9 +151,11 @@ public class SegmentInDiskManager {
         insertShort(docIDPos.Offset, WriteToWhere.To_Dictionary_File);
         insertInteger(valueLength, WriteToWhere.To_Dictionary_File);
         retrieveLocation(docIDPos, valueLength, docIDPos);
+        insertInteger(docIdCount, WriteToWhere.To_Dictionary_File);
 
         // update
         nextDictPos += SLOT_SIZE;
+        docIdCount += numberOfDocs;
     }
 
     public void insertPostingList(byte[] lst) {
@@ -226,15 +230,16 @@ public class SegmentInDiskManager {
         short docPg = readShort(byteBuffer, pointPos, WriteToWhere.To_Dictionary_File);
         short docOffset = readShort(byteBuffer, pointPos, WriteToWhere.To_Dictionary_File);
         int docLength = readInt(byteBuffer, pointPos, WriteToWhere.To_Dictionary_File);
-
+        int positionListMetadaLocation = readInt(byteBuffer, pointPos, WriteToWhere.To_Dictionary_File);
         dict.add((int) docPg);
         dict.add((int) docOffset);
         dict.add(docLength);
+        dict.add(positionListMetadaLocation);
 
         return keyword;
     }
 
-    public Map<Integer, List<Integer>> readDocIdList(int pageNum, int listOffset, int docIdLength) {
+    public Map<Integer, List<Integer>> readDocIdList(int pageNum, int listOffset, int docIdLength, int positionSlot) {
         Map<Integer, List<Integer>> docIdList = new TreeMap<>();
         byte[] bytes = new byte[docIdLength];
         Location loc = new Location(pageNum, listOffset);
@@ -257,11 +262,14 @@ public class SegmentInDiskManager {
         for (int i = 0; i < docIds.size(); i++) {
             List<Integer> positionListMetaData = new ArrayList<>();
             if (isPositional()) {
-                positionListMetaData.add(readInt(posMetaByteBuffer, metaPos, WriteToWhere.To_Pos_Meta_File));
-                positionListMetaData.add((int) readShort(posMetaByteBuffer, metaPos, WriteToWhere.To_Pos_Meta_File));
-                positionListMetaData.add(readInt(posMetaByteBuffer, metaPos, WriteToWhere.To_Pos_Meta_File));
+                loc = new Location(positionSlot * POSITION_SLOT_SIZE /
+                        pfc_posMeta.PAGE_SIZE, positionSlot * POSITION_SLOT_SIZE % pfc_posMeta.PAGE_SIZE);
+                positionListMetaData.add(readInt(posMetaByteBuffer, loc, WriteToWhere.To_Pos_Meta_File));
+                positionListMetaData.add((int) readShort(posMetaByteBuffer, loc, WriteToWhere.To_Pos_Meta_File));
+                positionListMetaData.add(readInt(posMetaByteBuffer, loc, WriteToWhere.To_Pos_Meta_File));
             }
             docIdList.put(docIds.get(i), positionListMetaData);
+            positionSlot++;
         }
         //if positional get the meta data per element
 
@@ -372,7 +380,6 @@ public class SegmentInDiskManager {
                 metaPos.Page += 1;
                 metaPos.Offset = lc.Offset;
                 posMetaByteBuffer.position(metaPos.Offset);
-
             }
             //implement equals location
             byte[] b = new byte[Integer.BYTES];
@@ -443,7 +450,7 @@ do{
         // set lc offset
         lc.Offset += subLength;
         newLength -= subLength;
-    }while(newLength >= pfc_posting.PAGE_SIZE);
+    }while(newLength > pfc_posting.PAGE_SIZE);
         return bb;
     }
 
@@ -571,7 +578,7 @@ do{
 
 
     public boolean hasKeyWord() {
-        return !(pointPos.Page == dictEndPos.Page && pointPos.Offset == dictEndPos.Offset);
+        return !(pointPos.Page == dictEndPos.Page && pointPos.Offset == dictEndPos.Offset) && !(pointPos.Page == dictEndPos.Page -1 && pointPos.Offset == pfc_dict.PAGE_SIZE && dictEndPos.Offset == 0);
     }
 
 
