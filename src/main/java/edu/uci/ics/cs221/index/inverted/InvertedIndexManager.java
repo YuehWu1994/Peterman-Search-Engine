@@ -193,9 +193,6 @@ public class InvertedIndexManager {
             flush();
         }
 
-        if (NUM_SEQ == DEFAULT_MERGE_THRESHOLD) {
-            mergeAllSegments();
-        }
     }
 
     /**
@@ -250,6 +247,10 @@ public class InvertedIndexManager {
         segMgr.close();
 
         reset();
+
+        if (NUM_SEQ == DEFAULT_MERGE_THRESHOLD) {
+            mergeAllSegments();
+        }
     }
 
 
@@ -350,11 +351,13 @@ public class InvertedIndexManager {
     public Iterator<Document> searchPhraseQuery(List<String> phrase) {
         Preconditions.checkNotNull(phrase);
         List<Document> iterator = new ArrayList<>();
-        if (phrase.isEmpty()) {
-            return iterator.iterator();
-        }
+
         if (!isPositionalIndex()) {
             throw new UnsupportedOperationException();
+        }
+
+        if (phrase.isEmpty()) {
+            return iterator.iterator();
         }
 
         //concat the list of phrases
@@ -383,12 +386,17 @@ public class InvertedIndexManager {
             segMgr.readPostingInitiate();
             segMgr.readPositionMetaInitiate();
             segMgr.readPositionInitiate();
-            //get all docs of the token
+
+
+            //get all docs and its metadata of the first token
             postingList1 = segMgr.readDocIdList(dictMap.get(keywords.get(0)).get(0),
                     dictMap.get(keywords.get(0)).get(1), dictMap.get(keywords.get(0)).get(2), dictMap.get(keywords.get(0)).get(3));
             for (int j = 1; j < keywords.size(); j++) {
                 //inside the loop get the next token from phrase
                 //then get all docs of keyword two
+                Map<Integer, List<Integer>> tmpPostingList = new TreeMap<>();
+
+
                 postingList2 = segMgr.readDocIdList(dictMap.get(keywords.get(j)).get(0),
                         dictMap.get(keywords.get(j)).get(1), dictMap.get(keywords.get(j)).get(2), dictMap.get(keywords.get(j)).get(3));
                 //loop through all docs of keword 1
@@ -402,6 +410,7 @@ public class InvertedIndexManager {
                             entry.getValue().get(2));
                     List<Integer> positionalList2 = segMgr.readPosList(postingList2.get(entry.getKey()).get(0), postingList2.get(entry.getKey()).get(1),
                             postingList2.get(entry.getKey()).get(2));
+
                     //loop through every position in doc1 of keyword1
                     int pos = 0;
                     boolean found = false;
@@ -409,14 +418,32 @@ public class InvertedIndexManager {
                         while (pos < positionalList2.size() && positionalList1.get(k) > positionalList2.get(pos)) {
                             pos++;
                         }
-                        if (positionalList1.get(k) == positionalList2.get(pos) + 1) {
+
+                        if (pos < positionalList2.size() && positionalList1.get(k) + j == positionalList2.get(pos)) {
                             found = true;
-                            continue;
+                            break;
                         }
                     }
+
+                    // if found the position of two words are consecutive, store the docId and its metadata of the second word
+                    if(found) {
+                        List<Integer> lst = new ArrayList<>();
+                        lst.add(entry.getValue().get(0));
+                        lst.add(entry.getValue().get(1));
+                        lst.add(entry.getValue().get(2));
+                        tmpPostingList.put(entry.getKey(), lst);
+                    }
                 }
-                postingList1 = postingList2;
+                postingList1 = tmpPostingList;
             }
+
+            //System.out.println(postingList1);
+            DocumentStore mapDBGetIdx = MapdbDocStore.createOrOpenReadOnly(idxFolder + "DocStore_" + files[i].getName().substring(8));
+
+            for (Map.Entry<Integer, List<Integer>> entry : postingList1.entrySet()){
+                iterator.add(mapDBGetIdx.getDocument(entry.getKey()));
+            }
+            mapDBGetIdx.close();
         }
         return iterator.iterator();
 
