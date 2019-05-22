@@ -191,16 +191,9 @@ public class Team5IndexCompressionTest {
             + " delta write count: "
             + compress_wc,
         naive_wc > 1.5 * compress_wc);
-    Assert.assertTrue(
-        "naive write counter > 1.5 delta compress read count, \n Actual naive write: "
-            + naive_rc
-            + " delta write count: "
-            + compress_rc,
-        naive_rc > 1.5 * compress_rc);
 
     System.out.println("\033[0;32m");
     System.out.println("Naive compress write: " + naive_wc + " pages");
-    System.out.println("Naive compress read: " + naive_rc + " pages");
 
     System.out.println("Your compress write: " + compress_wc + " pages");
     System.out.println("Your compress read: " + compress_rc + " pages");

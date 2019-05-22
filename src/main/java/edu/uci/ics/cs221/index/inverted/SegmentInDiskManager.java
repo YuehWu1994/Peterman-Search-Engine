@@ -450,7 +450,7 @@ do{
         // set lc offset
         lc.Offset += subLength;
         newLength -= subLength;
-    }while(newLength > pfc_posting.PAGE_SIZE);
+    }while(newLength >= pfc_posting.PAGE_SIZE);
         return bb;
     }
 

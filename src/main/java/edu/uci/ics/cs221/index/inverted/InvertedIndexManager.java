@@ -444,6 +444,7 @@ public class InvertedIndexManager {
                 iterator.add(mapDBGetIdx.getDocument(entry.getKey()));
             }
             mapDBGetIdx.close();
+            segMgr.close();
         }
         return iterator.iterator();
 
@@ -808,7 +809,6 @@ public class InvertedIndexManager {
         }
 
         list1Sz[0] = docIdList1.keySet().size();
-        //TODO should merge the docCounter length
         // convert docId in segment 2
         for (Map.Entry<Integer, List<Integer>> entry : docIdList2.entrySet()) {
             docIdList1.put(entry.getKey() + sz1, entry.getValue());
@@ -939,6 +939,7 @@ public class InvertedIndexManager {
             postingList = segMgr.readDocIdList(dictMap.get(keyword).get(0),
                     dictMap.get(keyword).get(1), dictMap.get(keyword).get(2), dictMap.get(keyword).get(3));
         }
+        segMgr.close();
         return postingList;
     }
 
