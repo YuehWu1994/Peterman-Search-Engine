@@ -880,7 +880,6 @@ public class InvertedIndexManager {
     }
 
     private void reset() {
-
         mapDB.close();
         ++NUM_SEQ;
         keyWordMap.clear();
@@ -970,5 +969,4 @@ public class InvertedIndexManager {
     private boolean isPositionalIndex() {
         return iiCompressor != null;
     }
-
 }
