@@ -27,7 +27,7 @@ public class SegmentInDiskManager {
     ByteBuffer positionByteBuffer; //used for writing/reading positions
     ByteBuffer posMetaByteBuffer;
 
-    public static int SLOT_SIZE = 16;//added int for also storing number of doc ids per posting list for search
+    public static int SLOT_SIZE = 18;//added int for also storing number of doc ids per posting list for search
     private static int POSITION_SLOT_SIZE = 10;
     private int docIdCount;
     /*
@@ -82,7 +82,7 @@ public class SegmentInDiskManager {
         byteBuffer = ByteBuffer.allocate(pfc_dict.PAGE_SIZE);
         refByteBuffer = ByteBuffer.allocate(pfc_dict.PAGE_SIZE);
 
-        keyWordPos = new Location(0, Integer.BYTES); // no end of docID, start by (0, 4)
+        keyWordPos = new Location(0, Integer.BYTES + Short.BYTES); // no end of docID, start by (0, 4)
         pointPos = new Location(0, 0);
         docIDPos = new Location(0, 0);
         dictEndPos = new Location(0, 0);
@@ -97,19 +97,19 @@ public class SegmentInDiskManager {
      * ===== ALLOCATION =====
      */
     public void allocateByteBuffer(int totalLength, int map_size) {
-        dictByteBuffer = ByteBuffer.allocate(Short.BYTES * 2 + totalLength + Integer.BYTES + map_size * SLOT_SIZE);
+        dictByteBuffer = ByteBuffer.allocate(Integer.BYTES + Short.BYTES + totalLength + Integer.BYTES + map_size * SLOT_SIZE);
     }
 
 
     // allocate the location where we start storing dictionary at the first four bytes of first page
     public void allocateKeywordStart(int totalLengthKeyword) {
-        int totalLengthKeyWord = totalLengthKeyword + Integer.BYTES;
+        int totalLengthKeyWord = totalLengthKeyword + Integer.BYTES + Short.BYTES;
 
-        dictByteBuffer.putShort((short) (totalLengthKeyWord / pfc_dict.PAGE_SIZE));
+        dictByteBuffer.putInt(totalLengthKeyWord / pfc_dict.PAGE_SIZE);
         dictByteBuffer.putShort((short) (totalLengthKeyWord % pfc_dict.PAGE_SIZE));
 
         // initialize position
-        nextKeywordPos = Integer.BYTES;
+        nextKeywordPos = Integer.BYTES + Short.BYTES;
         nextDictPos = totalLengthKeyWord + Integer.BYTES;
 
     }
@@ -138,7 +138,7 @@ public class SegmentInDiskManager {
     }
 
     /*
-     *         4              2            2            4               4
+     *         4              4            2            4               4
      * | keyword length | list page | list offset | list length | position metadata location
      */
     public void insertMetaDataSlot(int keyLength, int valueLength, int numberOfDocs) {
@@ -147,7 +147,7 @@ public class SegmentInDiskManager {
         insertInteger(keyLength, WriteToWhere.To_Dictionary_File);
         retrieveLocation(keyWordPos, keyLength, keyWordPos);
 
-        insertShort(docIDPos.Page, WriteToWhere.To_Dictionary_File);
+        insertInteger(docIDPos.Page, WriteToWhere.To_Dictionary_File);
         insertShort(docIDPos.Offset, WriteToWhere.To_Dictionary_File);
         insertInteger(valueLength, WriteToWhere.To_Dictionary_File);
         retrieveLocation(docIDPos, valueLength, docIDPos);
@@ -165,7 +165,7 @@ public class SegmentInDiskManager {
     public void insertPositionList(byte[] lst) {
         insertByte(lst, WriteToWhere.To_Position_List);
         //insert the metadata
-        insertInteger((int) posListPos.Page, WriteToWhere.To_Pos_Meta_File);
+        insertInteger( posListPos.Page, WriteToWhere.To_Pos_Meta_File);
         insertShort(posListPos.Offset, WriteToWhere.To_Pos_Meta_File);
         insertInteger(lst.length, WriteToWhere.To_Pos_Meta_File);
         retrieveLocation(posListPos, lst.length, posListPos);
@@ -177,7 +177,7 @@ public class SegmentInDiskManager {
     public void readInitiate() {
         // set pointPos
         byteBuffer = pfc_dict.readPage(0);
-        pointPos.Page = byteBuffer.getShort();
+        pointPos.Page = byteBuffer.getInt();
         pointPos.Offset = byteBuffer.getShort();
 
         // set byteBuffer to where the dictionary start (the page `pointPos` point at)
@@ -195,7 +195,7 @@ public class SegmentInDiskManager {
         } else {
             refByteBuffer = byteBuffer.duplicate();
         }
-        refByteBuffer.position(4);
+        refByteBuffer.position(6);
     }
 
     public void readPostingInitiate() {
@@ -227,11 +227,11 @@ public class SegmentInDiskManager {
 
         String keyword = readString(length, refByteBuffer, keyWordPos, WriteToWhere.To_Dictionary_File);
 
-        short docPg = readShort(byteBuffer, pointPos, WriteToWhere.To_Dictionary_File);
+        int docPg = readInt(byteBuffer, pointPos, WriteToWhere.To_Dictionary_File);
         short docOffset = readShort(byteBuffer, pointPos, WriteToWhere.To_Dictionary_File);
         int docLength = readInt(byteBuffer, pointPos, WriteToWhere.To_Dictionary_File);
         int positionListMetadaLocation = readInt(byteBuffer, pointPos, WriteToWhere.To_Dictionary_File);
-        dict.add((int) docPg);
+        dict.add(docPg);
         dict.add((int) docOffset);
         dict.add(docLength);
         dict.add(positionListMetadaLocation);
@@ -450,7 +450,7 @@ do{
         // set lc offset
         lc.Offset += subLength;
         newLength -= subLength;
-    }while(newLength >= pfc_posting.PAGE_SIZE);
+    }while(newLength > pfc_posting.PAGE_SIZE);
         return bb;
     }
 
