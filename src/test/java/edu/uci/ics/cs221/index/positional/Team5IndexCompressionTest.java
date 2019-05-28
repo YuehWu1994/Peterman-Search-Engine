@@ -196,7 +196,6 @@ public class Team5IndexCompressionTest {
     System.out.println("Naive compress write: " + naive_wc + " pages");
 
     System.out.println("Your compress write: " + compress_wc + " pages");
-    System.out.println("Your compress read: " + compress_rc + " pages");
     System.out.println("\033[0m");
   }
 

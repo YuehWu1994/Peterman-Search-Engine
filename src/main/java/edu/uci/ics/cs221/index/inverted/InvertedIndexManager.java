@@ -81,6 +81,12 @@ public class InvertedIndexManager {
     }
 
 
+    // ranking param
+    private Map<String, List<Integer>> rankingDictMap;
+
+    private Integer rankingSegId;
+
+
     private InvertedIndexManager(String indexFolder, Analyzer analyzer) {
         document_Counter = 0;
         idxFolder = indexFolder + "/";
@@ -89,6 +95,8 @@ public class InvertedIndexManager {
         totalLengthKeyword = 0;
         keyWordMap = TreeBasedTable.create();
         iiAnalyzer = analyzer;
+        rankingDictMap = new TreeMap<>();
+        rankingSegId = -1;
     }
 
     /**
@@ -106,6 +114,8 @@ public class InvertedIndexManager {
         totalLengthKeyword = 0;
         keyWordMap = TreeBasedTable.create();
         iiAnalyzer = analyzer;
+        rankingDictMap = new TreeMap<>();
+        rankingSegId = -1;
     }
 
     /**
@@ -230,7 +240,7 @@ public class InvertedIndexManager {
                 for (Map.Entry<Integer, List<Integer>> docId : entry.getValue().entrySet()) {
                     byte[] encodedPositionList;
                     encodedPositionList = iiCompressor.encode(docId.getValue());
-                    segMgr.insertPositionList(encodedPositionList);
+                    segMgr.insertPositionList(encodedPositionList, docId.getValue().size());
                 }
             }
 
@@ -473,6 +483,247 @@ public class InvertedIndexManager {
      */
     public void deleteDocuments(String keyword) {
     }
+
+
+    /**
+     * Performs top-K ranked search using TF-IDF.
+     * Returns an iterator that returns the K documents with highest TF-IDF scores.
+     *
+     * Unlike Boolean Query and Phrase Query where order of the documents doesn't matter,
+     * for ranked search, order of the document returned by the iterator matters.
+     *
+     * @param keywords, a list of keywords in the query
+     * @param topK, number of top documents weighted by TF-IDF
+     * @return a iterator of ordered documents matching the query
+     */
+    public Iterator<Document> searchTfIdf(List<String> keywords, int topK) {
+        //throw new UnsupportedOperationException();
+
+        // check empty and positional index
+        Preconditions.checkNotNull(keywords);
+        //List<Document> iterator = new ArrayList<>();
+        Iterator<Document> iterator = new ArrayList<Document>().iterator();
+
+        if (!isPositionalIndex()) {
+            throw new UnsupportedOperationException();
+        }
+
+        if (keywords.isEmpty()) {
+            return iterator;
+        }
+
+        Map<String, Double> idf = new HashMap<>();
+
+        // do analyzer
+        List<String> tokens = iiAnalyzer.analyze(String.join(" ", keywords));
+
+        // retrieve segment files
+        File[] files = getFiles("segment");
+        sort(files);
+
+
+        // ### FIRST PASS: calculate IDF's of the query keywords
+        setIDF(tokens, files, idf);
+
+        // ### SECOND PASS: calculate the score
+        List<DocID> topKDocumentId = calculateScore(tokens, files, idf, topK);
+
+
+        // setup document iterator
+        for (int i = 0; i < topKDocumentId.size(); ++i) {
+            DocumentStore mapDBIt = MapdbDocStore.createOrOpenReadOnly(idxFolder + "DocStore_" + topKDocumentId.get(i).SegmentID);
+
+            Set<Integer> docIt = new TreeSet<>();
+            docIt.add(topKDocumentId.get(i).LocalDocID);
+            iterator = Iterators.concat(iterator, Iterators.transform(docIt.iterator(), entry -> mapDBIt.getDocument(entry)));
+            mapDBIt.close();
+        }
+        return iterator;
+    }
+
+
+    public void setIDF(List<String> tokens, File[] files, Map<String, Double> idf){
+        //loop through every segment
+        int numDoc = 0;
+
+        for (int i = 0; i < files.length; ++i) {
+            String fileIdxStr = files[i].getName().substring(8);
+
+            // get/accumulate number of document
+            numDoc += getNumDocuments(Integer.parseInt(fileIdxStr));
+
+
+            // get/accumulate document frequency
+            for(String w : tokens){
+                int docFreq = getDocumentFrequency(Integer.parseInt(fileIdxStr), w);
+                if(!idf.containsKey(w)) idf.put(w, (double)docFreq);
+                else idf.put(w, idf.get(w) + (double)docFreq);
+            }
+        }
+
+        // after looping all the segment, count global IDF of each keyword
+        for(Map.Entry<String, Double> entry : idf.entrySet()){
+            Double v = entry.getValue();
+            entry.setValue(Math.log10(numDoc/v));
+        }
+    }
+
+    public List<DocID> calculateScore(List<String> tokens, File[] files, Map<String, Double> idf, int topK){
+        PriorityQueue<ScoreSet> pq = new PriorityQueue<>();
+
+        // setup tfidf of query
+        Map<String, Double> queryTfidf = setTfidfQuery(tokens, idf);
+
+
+        // loop all the segment file
+        for (int i = 0; i < files.length; ++i) {
+            String fileIdxStr = files[i].getName().substring(8);
+
+            Map<DocID, Double> dotProductAccumulator = new HashMap<>(); //  DocID is <SegmentID, LocalDocID>
+            Map<DocID, Double> vectorLengthAccumulator = new HashMap<>();
+
+            SegmentInDiskManager segMgr = new SegmentInDiskManager(idxFolder, fileIdxStr, iiCompressor);
+            segMgr.readInitiate();
+            Map<String, List<Integer>> dictMap = new TreeMap<>();
+
+            //load all the keywords of the segment
+            while (segMgr.hasKeyWord()) {
+                List<Integer> l1 = new ArrayList<>();
+                String k1 = segMgr.readKeywordAndDict(l1);
+                dictMap.put(k1, l1);
+            }
+
+            // initiate
+            segMgr.readPostingInitiate();
+            segMgr.readPositionMetaInitiate();
+            segMgr.readPositionInitiate();
+
+
+            // calculate tfidf and accumulate cosine similarity
+            for(Map.Entry<String, Double> entry : queryTfidf.entrySet()){
+                String w = entry.getKey();
+                if(!rankingDictMap.keySet().contains(w)){
+                    continue;
+                }
+                Map<Integer, List<Integer>> postingList = segMgr.readDocIdList(dictMap.get(w).get(0), dictMap.get(w).get(1), dictMap.get(w).get(2), dictMap.get(w).get(3));
+
+                for (Map.Entry<Integer, List<Integer>> postEntry : postingList.entrySet()) {
+                    int tf = postEntry.getValue().get(3); // 4th element is the number of position index
+                    Double tfidf = tf * idf.get(w);
+
+                    DocID doc = new DocID(Integer.parseInt(fileIdxStr), postEntry.getKey());
+
+                    if(!dotProductAccumulator.containsKey(doc)){
+                        dotProductAccumulator.put(doc, tfidf* queryTfidf.get(w));
+                        vectorLengthAccumulator.put(doc, tfidf*tfidf);
+                    }
+                    else{
+                        dotProductAccumulator.put(doc, dotProductAccumulator.get(doc) + tfidf* queryTfidf.get(w));
+                        vectorLengthAccumulator.put(doc, vectorLengthAccumulator.get(doc) + tfidf* tfidf);
+                    }
+                }
+
+            }
+
+            // retrieve the score and put scoreSet object into priority queue
+            int segNumDoc = getNumDocuments(Integer.parseInt(fileIdxStr));
+            for(int j = 0; j < segNumDoc; ++j){
+                DocID doc = new DocID(Integer.parseInt(fileIdxStr), j);
+                ScoreSet ss;
+                if(!dotProductAccumulator.containsKey(doc)){
+                    ss = new ScoreSet(0.0, doc);
+                }
+                else{
+                    ss = new ScoreSet(dotProductAccumulator.get(doc)/ Math.sqrt(vectorLengthAccumulator.get(doc)), doc);
+                }
+
+
+                pq.add(ss);
+                if(pq.size() > topK){
+                    pq.poll(); // assume that the peek value is the smallest one !!!
+                }
+
+            }
+        }
+
+        // transform to docID list
+        List<DocID> doclist = new ArrayList<>();
+        while(!pq.isEmpty()){
+            DocID doc = pq.poll().Doc;
+            doclist.add(doc);
+        }
+        Collections.reverse(doclist); // not sure !!!
+
+        return doclist;
+    }
+
+
+    public Map<String, Double> setTfidfQuery(List<String> tokens, Map<String, Double> idf){
+        Map<String, Double> queryTfidf = new HashMap<>();
+
+        for(String w : tokens){
+            if(!queryTfidf.containsKey(w)) queryTfidf.put(w, 1.0);
+            else  queryTfidf.put(w, queryTfidf.get(w) + 1.0);
+        }
+
+        for(Map.Entry<String, Double> entry : queryTfidf.entrySet()){
+            String w = entry.getKey();
+            if(!idf.containsKey(w)) entry.setValue(0.0);
+            else{
+                Double tf = entry.getValue();
+                entry.setValue(tf* idf.get(w));
+            }
+        }
+
+        return queryTfidf;
+    }
+
+    /**
+     * Returns the total number of documents within the given segment.
+     */
+    public int getNumDocuments(int segmentNum) {
+        DocumentStore mapDBGetIdx = MapdbDocStore.createOrOpenReadOnly(idxFolder + "DocStore_" + segmentNum);
+        int sz = (int)mapDBGetIdx.size();
+        mapDBGetIdx.close();
+        return sz;
+    }
+
+    /**
+     * Returns the number of documents containing the token within the given segment.
+     * The token should be already analyzed by the analyzer. The analyzer shouldn't be applied again.
+     */
+    public int getDocumentFrequency(int segmentNum, String token) {
+        // check whether we should create new dictMap
+        if(segmentNum != rankingSegId){
+            resetRankingParam(segmentNum);
+        }
+
+        if(!rankingDictMap.keySet().contains(token)){
+            return 0;
+        }
+        return rankingDictMap.get(token).get(4); // 5th element is the number of Docs
+    }
+
+    public void resetRankingParam(int segmentNum){
+        rankingSegId = segmentNum;
+        rankingDictMap.clear();
+
+        SegmentInDiskManager segMgr = new SegmentInDiskManager(idxFolder, String.valueOf(rankingSegId), iiCompressor);
+        segMgr.readInitiate();
+
+        rankingDictMap = new TreeMap<>();
+
+        //load all the keywords of the segment
+        while (segMgr.hasKeyWord()) {
+            List<Integer> l1 = new ArrayList<>();
+            String k1 = segMgr.readKeywordAndDict(l1);
+            rankingDictMap.put(k1, l1);
+        }
+
+        segMgr.close();
+    }
+
+
 
     /**
      * Gets the total number of segments in the inverted index.
@@ -773,7 +1024,7 @@ public class InvertedIndexManager {
                     counter++;
                     byte[] encodedPositionList;
                     encodedPositionList = iiCompressor.encode(positionalList);
-                    segMgrMerge.insertPositionList(encodedPositionList);
+                    segMgrMerge.insertPositionList(encodedPositionList, docId.getValue().size());
                 }
             }
         }
@@ -795,9 +1046,10 @@ public class InvertedIndexManager {
     private Map<Integer, List<Integer>> extractDocList(int[] list1Sz, List<Integer> v, SegmentInDiskManager segMgr1, SegmentInDiskManager segMgr2, int sz1) {
         Map<Integer, List<Integer>> docIdList1 = new TreeMap<>(), docIdList2 = new TreeMap<>();
         // the keyword exist in both segments
-        if (v.size() == 10) {
+        if (v.size() == 12) {
             docIdList1 = segMgr1.readDocIdList(v.get(1), v.get(2), v.get(3), v.get(4));
-            docIdList2 = segMgr2.readDocIdList(v.get(6), v.get(7), v.get(8), v.get(9));
+            //docIdList2 = segMgr2.readDocIdList(v.get(6), v.get(7), v.get(8), v.get(9));
+            docIdList2 = segMgr2.readDocIdList(v.get(7), v.get(8), v.get(9), v.get(10));
 
         } else {
             // exist in either  1st/2nd segment
