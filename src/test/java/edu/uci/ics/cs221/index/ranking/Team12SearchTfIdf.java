@@ -49,7 +49,9 @@ public class Team12SearchTfIdf {
         Iterator<Pair<Document, Double>> iterate = invertedIndex.searchTfIdf(phrase, 2);
     }
 
-
+    /**
+     * test if the score of documents is in descending order
+     */
     @Test
     public void test2() {
         invertedIndex = InvertedIndexManager.createOrOpenPositional(path, analyzer, compressor);
