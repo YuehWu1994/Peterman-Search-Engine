@@ -487,7 +487,11 @@ public class InvertedIndexManager {
 
     /**
      * Performs top-K ranked search using TF-IDF.
-     * Returns an iterator that returns the K documents with highest TF-IDF scores.
+     * Returns an iterator that returns the top K documents with highest TF-IDF scores.
+     *
+     * Each element is a pair of <Document, Double (TF-IDF Score)>.
+     *
+     * If parameter `topK` is null, then returns all the matching documents.
      *
      * Unlike Boolean Query and Phrase Query where order of the documents doesn't matter,
      * for ranked search, order of the document returned by the iterator matters.
@@ -496,13 +500,13 @@ public class InvertedIndexManager {
      * @param topK, number of top documents weighted by TF-IDF
      * @return a iterator of ordered documents matching the query
      */
-    public Iterator<Document> searchTfIdf(List<String> keywords, int topK) {
+    public Iterator<Pair<Document, Double>> searchTfIdf(List<String> keywords, Integer topK)  {
         //throw new UnsupportedOperationException();
 
         // check empty and positional index
         Preconditions.checkNotNull(keywords);
         //List<Document> iterator = new ArrayList<>();
-        Iterator<Document> iterator = new ArrayList<Document>().iterator();
+        Iterator<Pair<Document, Double>> iterator = new ArrayList<Pair<Document, Double>>().iterator();
 
         if (!isPositionalIndex()) {
             throw new UnsupportedOperationException();
@@ -526,16 +530,17 @@ public class InvertedIndexManager {
         setIDF(tokens, files, idf);
 
         // ### SECOND PASS: calculate the score
-        List<DocID> topKDocumentId = calculateScore(tokens, files, idf, topK);
+        List<ScoreSet> topKDocumentId = calculateScore(tokens, files, idf, topK);
 
 
         // setup document iterator
         for (int i = 0; i < topKDocumentId.size(); ++i) {
-            DocumentStore mapDBIt = MapdbDocStore.createOrOpenReadOnly(idxFolder + "DocStore_" + topKDocumentId.get(i).SegmentID);
+            DocumentStore mapDBIt = MapdbDocStore.createOrOpenReadOnly(idxFolder + "DocStore_" + topKDocumentId.get(i).Doc.SegmentID);
 
-            Set<Integer> docIt = new TreeSet<>();
-            docIt.add(topKDocumentId.get(i).LocalDocID);
-            iterator = Iterators.concat(iterator, Iterators.transform(docIt.iterator(), entry -> mapDBIt.getDocument(entry)));
+            Set<Pair<Document, Double>> pairIt = new TreeSet<>();
+
+            pairIt.add(new Pair(mapDBIt.getDocument(topKDocumentId.get(i).Doc.LocalDocID),  topKDocumentId.get(i).Score));
+            iterator = Iterators.concat(iterator, pairIt.iterator());
             mapDBIt.close();
         }
         return iterator;
@@ -568,7 +573,7 @@ public class InvertedIndexManager {
         }
     }
 
-    public List<DocID> calculateScore(List<String> tokens, File[] files, Map<String, Double> idf, int topK){
+    public List<ScoreSet> calculateScore(List<String> tokens, File[] files, Map<String, Double> idf, Integer topK){
         PriorityQueue<ScoreSet> pq = new PriorityQueue<>();
 
         // setup tfidf of query
@@ -637,9 +642,10 @@ public class InvertedIndexManager {
                     ss = new ScoreSet(dotProductAccumulator.get(doc)/ Math.sqrt(vectorLengthAccumulator.get(doc)), doc);
                 }
 
-
                 pq.add(ss);
-                if(pq.size() > topK){
+
+                // check null
+                if(topK != null && pq.size() > topK){
                     pq.poll(); // assume that the peek value is the smallest one !!!
                 }
 
@@ -647,14 +653,14 @@ public class InvertedIndexManager {
         }
 
         // transform to docID list
-        List<DocID> doclist = new ArrayList<>();
+        List<ScoreSet> scoreSetlist = new ArrayList<>();
         while(!pq.isEmpty()){
-            DocID doc = pq.poll().Doc;
-            doclist.add(doc);
+            ScoreSet ss = pq.poll();
+            scoreSetlist.add(ss);
         }
-        Collections.reverse(doclist); // not sure !!!
+        Collections.reverse(scoreSetlist); // not sure !!!
 
-        return doclist;
+        return scoreSetlist;
     }
 
 
