@@ -236,6 +236,13 @@ public class InvertedIndexManager {
             }
             segMgr.insertMetaDataSlot(entry.getKey().getBytes().length, encodedPostingList.length, entry.getValue().size());
             segMgr.insertPostingList(encodedPostingList);
+
+            // p4 insert term frequency list
+            Map<Integer, List<Integer>> m = entry.getValue();
+            for(Map.Entry<Integer, List<Integer>> ent : m.entrySet()){
+                segMgr.insertTFList(ent.getValue().size());
+            }
+
             //iterate through every documentID and get the position list
             if (isPositionalIndex()) {
                 for (Map.Entry<Integer, List<Integer>> docId : entry.getValue().entrySet()) {
@@ -618,7 +625,8 @@ public class InvertedIndexManager {
                 Map<Integer, List<Integer>> postingList = segMgr.readDocIdList(dictMap.get(w).get(0), dictMap.get(w).get(1), dictMap.get(w).get(2), dictMap.get(w).get(3));
 
                 for (Map.Entry<Integer, List<Integer>> postEntry : postingList.entrySet()) {
-                    int tf = postEntry.getValue().get(3); // 4th element is the number of position index
+                    // use tf list file
+                    int tf = postEntry.getValue().get(postEntry.getValue().size()-1);
                     Double tfidf = tf * idf.get(w);
 
                     DocID doc = new DocID(Integer.parseInt(fileIdxStr), postEntry.getKey());
@@ -782,6 +790,7 @@ public class InvertedIndexManager {
 
         // initiate for reading posting list
         segMgr.readPostingInitiate();
+        segMgr.readTFInitiate();
 
         // read docId from segment and write to invertedLists
         for (Map.Entry<String, List<Integer>> entry : dictMap.entrySet()) {
@@ -842,6 +851,8 @@ public class InvertedIndexManager {
         segMgr.readPostingInitiate();
         segMgr.readPositionInitiate();
         segMgr.readPositionMetaInitiate();
+        segMgr.readTFInitiate();
+
         // read docId from segment and write to invertedLists
         for (Map.Entry<String, List<Integer>> entry : dictMap.entrySet()) {
 
@@ -993,6 +1004,10 @@ public class InvertedIndexManager {
         segMgr1.readPostingInitiate();
         segMgr2.readPostingInitiate();
 
+        // p4
+        segMgr1.readTFInitiate();
+        segMgr2.readTFInitiate();
+
         if (isPositionalIndex()) {
             segMgr1.readPositionInitiate();
             segMgr2.readPositionInitiate();
@@ -1018,12 +1033,15 @@ public class InvertedIndexManager {
 
             segMgrMerge.insertMetaDataSlot(entry.getKey().getBytes().length, docIdLength, docIdList.size());
 
-
             segMgrMerge.insertPostingList(encodedPostingList);
 
-            if (isPositionalIndex()) {
-                int counter = 0;
-                for (Map.Entry<Integer, List<Integer>> docId : docIdList.entrySet()) {
+            // p4
+            int counter = 0;
+            for (Map.Entry<Integer, List<Integer>> docId : docIdList.entrySet()) {
+                // p4 insert term frequency list
+                int sz = docId.getValue().size();
+                segMgrMerge.insertTFList(docId.getValue().get(sz-1));
+                if (isPositionalIndex()) {
                     List<Integer> positionalList;
                     if (counter < lst1Sz[0]) {
                         positionalList = segMgr1.readPosList(docId.getValue().get(0),
@@ -1032,12 +1050,31 @@ public class InvertedIndexManager {
                         positionalList = segMgr2.readPosList(docId.getValue().get(0),
                                 docId.getValue().get(1), docId.getValue().get(2));
                     }
-                    counter++;
+
                     byte[] encodedPositionList;
                     encodedPositionList = iiCompressor.encode(positionalList);
                     segMgrMerge.insertPositionList(encodedPositionList, docId.getValue().size());
                 }
+                counter++;
             }
+
+//            if (isPositionalIndex()) {
+//                int counter = 0;
+//                for (Map.Entry<Integer, List<Integer>> docId : docIdList.entrySet()) {
+//                    List<Integer> positionalList;
+//                    if (counter < lst1Sz[0]) {
+//                        positionalList = segMgr1.readPosList(docId.getValue().get(0),
+//                                docId.getValue().get(1), docId.getValue().get(2));
+//                    } else {
+//                        positionalList = segMgr2.readPosList(docId.getValue().get(0),
+//                                docId.getValue().get(1), docId.getValue().get(2));
+//                    }
+//                    counter++;
+//                    byte[] encodedPositionList;
+//                    encodedPositionList = iiCompressor.encode(positionalList);
+//                    segMgrMerge.insertPositionList(encodedPositionList, docId.getValue().size());
+//                }
+//            }
         }
 
         segMgrMerge.allocateNumberOfKeyWord(mergedMap.size());
@@ -1105,6 +1142,12 @@ public class InvertedIndexManager {
         f1.delete();
         f2.delete();
 
+
+        f1 = new File(idxFolder + "tf_" + id1);
+        f2 = new File(idxFolder + "tf_" + id2);
+        f1.delete();
+        f2.delete();
+
         // rename segment
         f1 = new File(idxFolder + "segment_mergedSegment");
         f2 = new File(idxFolder + "segment_" + id1 / 2);
@@ -1124,6 +1167,10 @@ public class InvertedIndexManager {
 
         f1 = new File(idxFolder + "meta_mergedSegment");
         f2 = new File(idxFolder + "meta_" + id1 / 2);
+        success = f1.renameTo(f2);
+
+        f1 = new File(idxFolder + "tf_mergedSegment");
+        f2 = new File(idxFolder + "tf_" + id1 / 2);
         success = f1.renameTo(f2);
 
         // delete 2nd document store

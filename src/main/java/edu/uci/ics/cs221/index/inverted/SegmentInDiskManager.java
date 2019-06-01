@@ -21,14 +21,19 @@ public class SegmentInDiskManager {
     PageFileChannel pfc_posting;
     private PageFileChannel pfc_position;
     private PageFileChannel pfc_posMeta;
+    private PageFileChannel pfc_tf;
+
     ByteBuffer dictByteBuffer; // this byte buffer is used to write keyword and dictionary
     ByteBuffer byteBuffer; //used for writing postingList
     ByteBuffer refByteBuffer; // this byte buffer is used to read keyword or docId
     ByteBuffer positionByteBuffer; //used for writing/reading positions
+    ByteBuffer tfByteBuffer; // term frequency byte buffer
     ByteBuffer posMetaByteBuffer;
 
+    // p4
     public static int SLOT_SIZE = 20;//added int for also storing number of doc ids per posting list for search
-    private static int POSITION_SLOT_SIZE = 14;
+    // p4
+    private static int POSITION_SLOT_SIZE = 10;
     private int docIdCount;
     /*
      * Define the location where we point to docID, keyword
@@ -43,6 +48,7 @@ public class SegmentInDiskManager {
     private Location pointPos;
     private Location posPointPos;
     private Location metaPos;
+    private Location tfPointPos;
 
     private Compressor compressor;//to indicate if inverted index s positional
 
@@ -51,7 +57,8 @@ public class SegmentInDiskManager {
         To_Dictionary_File,
         To_Posting_List,
         To_Position_List,
-        To_Pos_Meta_File
+        To_Pos_Meta_File,
+        TO_Tf_File
     }
 
 
@@ -65,6 +72,7 @@ public class SegmentInDiskManager {
     SegmentInDiskManager(String folder, String seg, Compressor compressor) {
         Path path_dict = Paths.get(folder + "segment_" + seg);
         Path path_poisting = Paths.get(folder + "posting_" + seg);
+        Path path_tf = Paths.get(folder + "tf_" + seg);
 
         this.compressor = compressor;
         docIdCount = 0;
@@ -78,9 +86,11 @@ public class SegmentInDiskManager {
         }
         pfc_dict = PageFileChannel.createOrOpen(path_dict);
         pfc_posting = PageFileChannel.createOrOpen(path_poisting);
+        pfc_tf = PageFileChannel.createOrOpen(path_tf);
 
         byteBuffer = ByteBuffer.allocate(pfc_dict.PAGE_SIZE);
         refByteBuffer = ByteBuffer.allocate(pfc_dict.PAGE_SIZE);
+        tfByteBuffer = ByteBuffer.allocate(pfc_dict.PAGE_SIZE);
 
         keyWordPos = new Location(0, Integer.BYTES); // no end of docID, start by (0, 4)
         pointPos = new Location(0, 0);
@@ -89,6 +99,7 @@ public class SegmentInDiskManager {
         posListPos = new Location(0, 0);
         posPointPos = new Location(0, 0);
         metaPos = new Location(0, 0);
+        tfPointPos = new Location(0, 0);
         nextKeywordPos = 0;
         nextDictPos = 0;
     }
@@ -165,19 +176,24 @@ public class SegmentInDiskManager {
         insertByte(lst, WriteToWhere.To_Posting_List);
     }
 
+    public void insertTFList(int tf){
+        insertInteger(tf, WriteToWhere.TO_Tf_File);
+        // needn't retrieveLocation (not sure !!!)
+    }
+
     public void insertPositionList(byte[] lst, int posSize) {
         insertByte(lst, WriteToWhere.To_Position_List);
         //insert the metadata
         /*
-         *         4           2            4                   4
-         * | list page | list offset | list length | number of position index
+         *         4           2            4
+         * | list page | list offset | list length
          */
         insertInteger((int) posListPos.Page, WriteToWhere.To_Pos_Meta_File);
         insertShort(posListPos.Offset, WriteToWhere.To_Pos_Meta_File);
         insertInteger(lst.length, WriteToWhere.To_Pos_Meta_File);
 
         // p4: insert number of position index
-        insertInteger(posSize, WriteToWhere.To_Pos_Meta_File);
+        //insertInteger(posSize, WriteToWhere.To_Pos_Meta_File);
 
         retrieveLocation(posListPos, lst.length, posListPos);
     }
@@ -233,6 +249,13 @@ public class SegmentInDiskManager {
         metaPos.Offset = 0;
     }
 
+
+    public void readTFInitiate() {
+        tfByteBuffer = pfc_tf.readPage(0);
+        tfPointPos.Page = 0;
+        tfPointPos.Offset = 0;
+    }
+
     public String readKeywordAndDict(List<Integer> dict) {
         int length = readInt(byteBuffer, pointPos, WriteToWhere.To_Dictionary_File);
 
@@ -276,18 +299,24 @@ public class SegmentInDiskManager {
             docIds = new NaiveCompressor().decode(bytes);
         }
         for (int i = 0; i < docIds.size(); i++) {
-            List<Integer> positionListMetaData = new ArrayList<>();
+            List<Integer> posListMetaDataAndTF = new ArrayList<>();
             if (isPositional()) {
                 loc = new Location(positionSlot * POSITION_SLOT_SIZE /
                         pfc_posMeta.PAGE_SIZE, positionSlot * POSITION_SLOT_SIZE % pfc_posMeta.PAGE_SIZE);
-                positionListMetaData.add(readInt(posMetaByteBuffer, loc, WriteToWhere.To_Pos_Meta_File));
-                positionListMetaData.add((int) readShort(posMetaByteBuffer, loc, WriteToWhere.To_Pos_Meta_File));
-                positionListMetaData.add(readInt(posMetaByteBuffer, loc, WriteToWhere.To_Pos_Meta_File));
+                posListMetaDataAndTF.add(readInt(posMetaByteBuffer, loc, WriteToWhere.To_Pos_Meta_File));
+                posListMetaDataAndTF.add((int) readShort(posMetaByteBuffer, loc, WriteToWhere.To_Pos_Meta_File));
+                posListMetaDataAndTF.add(readInt(posMetaByteBuffer, loc, WriteToWhere.To_Pos_Meta_File));
 
                 // p4: read number of position index
-                positionListMetaData.add(readInt(posMetaByteBuffer, loc, WriteToWhere.To_Pos_Meta_File));
+                //positionListMetaData.add(readInt(posMetaByteBuffer, loc, WriteToWhere.To_Pos_Meta_File));
             }
-            docIdList.put(docIds.get(i), positionListMetaData);
+
+            // p4: read term frequency
+            loc = new Location(positionSlot * Integer.BYTES /
+                    pfc_tf.PAGE_SIZE, positionSlot * Integer.BYTES % pfc_tf.PAGE_SIZE);
+            posListMetaDataAndTF.add(readInt(tfByteBuffer, loc, WriteToWhere.TO_Tf_File));
+
+            docIdList.put(docIds.get(i), posListMetaDataAndTF);
             positionSlot++;
         }
         //if positional get the meta data per element
@@ -407,6 +436,25 @@ public class SegmentInDiskManager {
             posMetaByteBuffer = newBb;
             int i = ByteBuffer.wrap(b).getInt();
             return i;
+        }
+        // p4
+        else if(writeWhere == WriteToWhere.TO_Tf_File){
+            if (tfPointPos.Page != lc.Page) {
+                bb = pfc_tf.readPage(lc.Page);
+
+                tfPointPos.Page += 1;
+                tfPointPos.Offset = lc.Offset;
+                tfByteBuffer.position(tfPointPos.Offset);
+
+            }
+            //implement equals location
+            byte[] b = new byte[Integer.BYTES];
+            ByteBuffer newBb = readByte(bb, lc, tfByteBuffer.remaining(), Integer.BYTES, b, writeWhere);
+
+            tfByteBuffer = newBb;
+            int i = ByteBuffer.wrap(b).getInt();
+            return i;
+
         } else {
             if (pointPos.Page != lc.Page) {
                 bb = pfc_dict.readPage(lc.Page);
@@ -530,6 +578,19 @@ do{
                 posMetaByteBuffer.putInt(i);
                 metaPos.Offset += Integer.BYTES;
             }
+        }
+        // p4
+        else if (writeWhere == WriteToWhere.TO_Tf_File){
+            if (Integer.BYTES > tfByteBuffer.remaining()) {
+                // split into 2 substring and insert into page respectively
+                Pair<byte[], byte[]> byteP = splitIntegerToByte(tfByteBuffer.remaining(), i);
+
+                // allocate two byte array
+                allocateBytePair(byteP, writeWhere);
+            } else {
+                tfByteBuffer.putInt(i);
+                tfPointPos.Offset += Integer.BYTES;
+            }
         } else {
             dictByteBuffer.putInt(i);
         }
@@ -574,6 +635,26 @@ do{
             positionByteBuffer.put(byteP.getValue());
             posPointPos.Offset += byteP.getValue().length;
         }
+        // p4
+        else if(writeToWhere == WriteToWhere.TO_Tf_File){
+            tfByteBuffer.put(byteP.getKey());
+
+            // append page and update point position
+            pfc_tf.appendPage(tfByteBuffer);
+            pfc_tf.writeCounter--;
+            tfPointPos.Page += 1;
+            tfPointPos.Offset = 0;
+
+            // insert
+            tfByteBuffer.clear();
+            tfByteBuffer = ByteBuffer.allocate(pfc_tf.PAGE_SIZE);
+            if(byteP.getValue().length > pfc_tf.PAGE_SIZE){
+                allocateBytePair(splitByteToTwo(tfByteBuffer.remaining(),byteP.getValue()), writeToWhere);
+                return;
+            }
+            tfByteBuffer.put(byteP.getValue());
+            tfPointPos.Offset += byteP.getValue().length;
+        }
         else {
             posMetaByteBuffer.put(byteP.getKey());
 
@@ -616,6 +697,7 @@ do{
 
     public void appendPage() {
         pfc_posting.appendPage(byteBuffer);
+        pfc_tf.appendPage(tfByteBuffer);
         if (isPositional()) {
             pfc_position.appendPage(positionByteBuffer);
             pfc_posMeta.appendPage(posMetaByteBuffer);
