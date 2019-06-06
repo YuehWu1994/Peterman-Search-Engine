@@ -32,7 +32,6 @@ public class IcsSearchEngine {
         docDir = documentDirectory;
         ii = indexManager;
         nodes = new HashMap<>();
-        writeIndex();
     }
 
     /**
@@ -120,12 +119,12 @@ public class IcsSearchEngine {
      */
     public List<Pair<Integer, Double>> getPageRankScores() {
         //make sure data structure is not null
-        Preconditions.checkArgument(nodes.size() == 0);
+        Preconditions.checkArgument(nodes.size() > 0);
         List<Pair<Integer, Double>> docs = new ArrayList<Pair<Integer, Double>>();
         for (Map.Entry<Integer, Node> entry : nodes.entrySet()) {
-            docs.add(new Pair(new Document(getDocumentText(entry.getKey())), entry.getValue().getCurrentScore()));
+            docs.add(new Pair(entry.getKey(), entry.getValue().getCurrentScore()));
         }
-        Collections.sort(docs, Comparator.comparing(p -> p.getRight()));
+        Collections.sort(docs, Comparator.comparing(p -> -p.getRight()));
         return docs;
     }
 
