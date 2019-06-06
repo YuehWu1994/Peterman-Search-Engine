@@ -53,15 +53,13 @@ public class IcsSearchEngine {
 
         }
         ii.flush();
-        computePageRank();
     }
 
     /**
      * Computes the page rank score from the "id-graph.tsv" file in the document directory.
      * The results of the computation can be saved in a class variable and will be later retrieved by `getPageRankScores`.
      */
-    public void computePageRank() {
-        int numOfIterations = 5;
+    public void computePageRank(int numIterations) {
         double dampingFactor = 0.85;
         File file = new File(docDir.toString() + "/id-graph.tsv");
 
@@ -89,7 +87,7 @@ public class IcsSearchEngine {
             }
             br.close();
             //loop through number of iterations
-            for(int i = 0; i < numOfIterations; i++){
+            for(int i = 0; i < numIterations; i++){
                 double currentScore, incomingScores = 0;
                 //loop through all pages
                 for (Map.Entry<Integer, Node> entry : nodes.entrySet()) {
@@ -104,6 +102,7 @@ public class IcsSearchEngine {
                     currentScore += dampingFactor * incomingScores;
                     page.setCurrentScore(currentScore);
                     nodes.put(entry.getKey(), page);
+                    incomingScores = 0;
                 }
                 setPreviousScore();
             }
