@@ -79,54 +79,6 @@ public class Team17searchTfIdfTest {
 
 
     /**
-     * Add documents that are very similar and check if the correct top K is retrieved for a keyWord.
-     * */
-    @Test
-    public void test2(){
-        //Initialize the iim object
-        iim = InvertedIndexManager.createOrOpenPositional(
-                path,
-                new ComposableAnalyzer(new PunctuationTokenizer(), new PorterStemmer()),
-                new DeltaVarLenCompressor()
-        );
-
-        //Create and add documents
-        Document doc1 = new Document("The purpose of life is to code");
-        Document doc2 = new Document("The purpose of life of life of life is to eat good food");
-        Document doc3 = new Document("Life of Pi is a good movie");
-
-        iim.addDocument(doc1);
-        iim.addDocument(doc2);
-        iim.addDocument(doc3);
-        iim.flush();
-
-        List<String> searchKeyword = new ArrayList<>(Arrays.asList("The", "purpose", "of", "life", "is"));
-
-        Iterator<Pair<Document, Double>> res = iim.searchTfIdf(searchKeyword, 3);
-
-
-        List<String> expected = new ArrayList<String>();
-        List<String> actual = new ArrayList<String>();
-        int count = 0;
-
-        //Check which of these are topK
-        expected.add(doc1.getText());
-        expected.add(doc2.getText());
-        expected.add(doc3.getText());
-
-        while(res.hasNext()){
-            count ++;
-            Pair<Document, Double> result = res.next();
-            actual.add(result.getLeft().getText());
-        }
-
-        assertEquals(3, count);
-        Assert.assertEquals(expected, actual);
-    }
-
-
-
-    /**
      * Search for a non existing keyword.
      * */
     @Test
