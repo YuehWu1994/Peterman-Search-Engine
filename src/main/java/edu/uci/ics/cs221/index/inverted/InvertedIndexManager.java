@@ -545,6 +545,8 @@ public class InvertedIndexManager {
 
 
     public void setIDF(List<String> tokens, File[] files, Map<String, Double> idf){
+        Set<String> tokenSet = new HashSet<>(tokens);
+
         //loop through every segment
         int numDoc = 0;
 
@@ -556,7 +558,7 @@ public class InvertedIndexManager {
 
 
             // get/accumulate document frequency
-            for(String w : tokens){
+            for(String w : tokenSet){
                 int docFreq = getDocumentFrequency(Integer.parseInt(fileIdxStr), w);
                 if(!idf.containsKey(w)) idf.put(w, (double)docFreq);
                 else idf.put(w, idf.get(w) + (double)docFreq);
