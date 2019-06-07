@@ -234,10 +234,10 @@ public class InvertedIndexManager {
             segMgr.insertPostingList(encodedPostingList);
 
             //iterate through every documentID and get the position list
-                for (Map.Entry<Integer, List<Integer>> docId : entry.getValue().entrySet()) {
-                    segMgr.insertTFList(docId.getValue().size());
-                    if (isPositionalIndex()) {
-                        byte[] encodedPositionList;
+            for (Map.Entry<Integer, List<Integer>> docId : entry.getValue().entrySet()) {
+                segMgr.insertTFList(docId.getValue().size());
+                if (isPositionalIndex()) {
+                    byte[] encodedPositionList;
                     encodedPositionList = iiCompressor.encode(docId.getValue());
                     segMgr.insertPositionList(encodedPositionList, docId.getValue().size());
                 }
@@ -435,7 +435,7 @@ public class InvertedIndexManager {
                     }
 
                     // if found the position of two words are consecutive, store the docId and its metadata of the second word
-                    if(found) {
+                    if (found) {
                         List<Integer> lst = new ArrayList<>();
                         lst.add(entry.getValue().get(0));
                         lst.add(entry.getValue().get(1));
@@ -449,7 +449,7 @@ public class InvertedIndexManager {
             //System.out.println(postingList1);
             DocumentStore mapDBGetIdx = MapdbDocStore.createOrOpenReadOnly(idxFolder + "DocStore_" + files[i].getName().substring(8));
 
-            for (Map.Entry<Integer, List<Integer>> entry : postingList1.entrySet()){
+            for (Map.Entry<Integer, List<Integer>> entry : postingList1.entrySet()) {
                 iterator.add(mapDBGetIdx.getDocument(entry.getKey()));
             }
             mapDBGetIdx.close();
@@ -487,19 +487,19 @@ public class InvertedIndexManager {
     /**
      * Performs top-K ranked search using TF-IDF.
      * Returns an iterator that returns the top K documents with highest TF-IDF scores.
-     *
+     * <p>
      * Each element is a pair of <Document, Double (TF-IDF Score)>.
-     *
+     * <p>
      * If parameter `topK` is null, then returns all the matching documents.
-     *
+     * <p>
      * Unlike Boolean Query and Phrase Query where order of the documents doesn't matter,
      * for ranked search, order of the document returned by the iterator matters.
      *
      * @param keywords, a list of keywords in the query
-     * @param topK, number of top documents weighted by TF-IDF
+     * @param topK,     number of top documents weighted by TF-IDF
      * @return a iterator of ordered documents matching the query
      */
-    public Iterator<Pair<Document, Double>> searchTfIdf(List<String> keywords, Integer topK)  {
+    public Iterator<Pair<Document, Double>> searchTfIdf(List<String> keywords, Integer topK) {
 
         // check empty and positional index
         Preconditions.checkNotNull(keywords);
@@ -533,7 +533,7 @@ public class InvertedIndexManager {
 
             List<Pair<Document, Double>> pairIt = new ArrayList<>();
 
-            pairIt.add(new Pair(mapDBIt.getDocument(topKDocumentId.get(i).Doc.LocalDocID),  topKDocumentId.get(i).Score));
+            pairIt.add(new Pair(mapDBIt.getDocument(topKDocumentId.get(i).Doc.LocalDocID), topKDocumentId.get(i).Score));
             iterator = Iterators.concat(iterator, pairIt.iterator());
             mapDBIt.close();
         }
@@ -541,7 +541,7 @@ public class InvertedIndexManager {
     }
 
 
-    public void setIDF(List<String> tokens, File[] files, Map<String, Double> idf){
+    public void setIDF(List<String> tokens, File[] files, Map<String, Double> idf) {
         //loop through every segment
         int numDoc = 0;
 
@@ -553,32 +553,30 @@ public class InvertedIndexManager {
 
 
             // get/accumulate document frequency
-            for(String w : tokens){
+            for (String w : tokens) {
                 int docFreq = getDocumentFrequency(Integer.parseInt(fileIdxStr), w);
-                if(!idf.containsKey(w)) idf.put(w, (double)docFreq);
-                else idf.put(w, idf.get(w) + (double)docFreq);
+                if (!idf.containsKey(w)) idf.put(w, (double) docFreq);
+                else idf.put(w, idf.get(w) + (double) docFreq);
             }
         }
 
         // after looping all the segment, count global IDF of each keyword
-        for(Map.Entry<String, Double> entry : idf.entrySet()){
+        for (Map.Entry<String, Double> entry : idf.entrySet()) {
             Double v = entry.getValue();
-            entry.setValue(Math.log10(numDoc/v));
+            entry.setValue(Math.log10(numDoc / v));
         }
     }
 
-    public List<ScoreSet> calculateScore(List<String> tokens, File[] files, Map<String, Double> idf, Integer topK){
+    public List<ScoreSet> calculateScore(List<String> tokens, File[] files, Map<String, Double> idf, Integer topK) {
         //PriorityQueue<ScoreSet> pq = new PriorityQueue<>();
         Comparator<ScoreSet> comp = Ordering.natural().reverse();
         MinMaxPriorityQueue<ScoreSet> pq;
-        if(topK == null) {
+        if (topK == null) {
             pq = MinMaxPriorityQueue.orderedBy(comp).create();
-        }
-        else if(topK == 0){
+        } else if (topK == 0) {
             pq = MinMaxPriorityQueue.orderedBy(comp).create();
             return pq.stream().collect(Collectors.toCollection(ArrayList::new));
-        }
-        else{
+        } else {
             pq = MinMaxPriorityQueue.orderedBy(comp).maximumSize(topK).create();
         }
         // setup tfidf of query
@@ -605,35 +603,34 @@ public class InvertedIndexManager {
 
             // initiate
             segMgr.readPostingInitiate();
-            if(isPositionalIndex()) {
+            if (isPositionalIndex()) {
                 segMgr.readPositionMetaInitiate();
                 segMgr.readPositionInitiate();
             }
             segMgr.readTFInitiate();
 
             // calculate tfidf and accumulate cosine similarity
-            for(Map.Entry<String, Double> entry : queryTfidf.entrySet()){
+            for (Map.Entry<String, Double> entry : queryTfidf.entrySet()) {
                 String w = entry.getKey();
                 // p4 check!!!
-                if(!dictMap.keySet().contains(w)){
+                if (!dictMap.keySet().contains(w)) {
                     continue;
                 }
                 Map<Integer, List<Integer>> postingList = segMgr.readDocIdList(dictMap.get(w).get(0), dictMap.get(w).get(1), dictMap.get(w).get(2), dictMap.get(w).get(3));
 
                 for (Map.Entry<Integer, List<Integer>> postEntry : postingList.entrySet()) {
                     // use tf list file
-                    int tf = postEntry.getValue().get(postEntry.getValue().size()-1);
+                    int tf = postEntry.getValue().get(postEntry.getValue().size() - 1);
                     Double tfidf = tf * idf.get(w);
 
                     int docId = postEntry.getKey();
 
-                    if(!dotProductAccumulator.containsKey(docId)){
-                        dotProductAccumulator.put(docId, tfidf* queryTfidf.get(w));
-                        vectorLengthAccumulator.put(docId, tfidf*tfidf);
-                    }
-                    else{
-                        dotProductAccumulator.put(docId, dotProductAccumulator.get(docId) + tfidf* queryTfidf.get(w));
-                        vectorLengthAccumulator.put(docId, vectorLengthAccumulator.get(docId) + tfidf* tfidf);
+                    if (!dotProductAccumulator.containsKey(docId)) {
+                        dotProductAccumulator.put(docId, tfidf * queryTfidf.get(w));
+                        vectorLengthAccumulator.put(docId, tfidf * tfidf);
+                    } else {
+                        dotProductAccumulator.put(docId, dotProductAccumulator.get(docId) + tfidf * queryTfidf.get(w));
+                        vectorLengthAccumulator.put(docId, vectorLengthAccumulator.get(docId) + tfidf * tfidf);
                     }
                 }
 
@@ -641,52 +638,47 @@ public class InvertedIndexManager {
 
             // retrieve the score and put scoreSet object into priority queue
             int segNumDoc = getNumDocuments(Integer.parseInt(fileIdxStr));
-            for(int j = 0; j < segNumDoc; ++j){
+            for (int j = 0; j < segNumDoc; ++j) {
                 ScoreSet ss;
 
-                if(!dotProductAccumulator.containsKey(j) || (dotProductAccumulator.get(j) == 0.0 && vectorLengthAccumulator.get(j) == 0.0)) continue;
+                if (!dotProductAccumulator.containsKey(j) || (dotProductAccumulator.get(j) == 0.0 && vectorLengthAccumulator.get(j) == 0.0))
+                    continue;
 
-                ss = new ScoreSet(dotProductAccumulator.get(j)/ Math.sqrt(vectorLengthAccumulator.get(j)), new DocID(Integer.parseInt(fileIdxStr), j));
-                if(topK != null) {
-                    if(pq.size() < topK) {
+                ss = new ScoreSet(dotProductAccumulator.get(j) / Math.sqrt(vectorLengthAccumulator.get(j)), new DocID(Integer.parseInt(fileIdxStr), j));
+                if (topK != null) {
+                    if (pq.size() < topK) {
                         pq.add(ss);
-                    }
-                        else
-                        {
-                            if (pq.peekLast().compareTo(ss) == -1) {
-                                pq.add(ss);
-                            }
+                    } else {
+                        if (pq.peekLast().compareTo(ss) == -1) {
+                            pq.add(ss);
                         }
                     }
-
-                else{
+                } else {
                     pq.add(ss);
                 }
             }
         }
 
-        // transform to docID list
-
-        //Collections.reverse(scoreSetlist);
-
-        return pq.stream().collect(Collectors.toCollection(ArrayList::new));
+        List<ScoreSet> result = pq.stream().collect(Collectors.toCollection(ArrayList::new));
+        Collections.sort(result, Collections.reverseOrder());
+        return result;
     }
 
 
-    public Map<String, Double> setTfidfQuery(List<String> tokens, Map<String, Double> idf){
+    public Map<String, Double> setTfidfQuery(List<String> tokens, Map<String, Double> idf) {
         Map<String, Double> queryTfidf = new HashMap<>();
 
-        for(String w : tokens){
-            if(!queryTfidf.containsKey(w)) queryTfidf.put(w, 1.0);
-            else  queryTfidf.put(w, queryTfidf.get(w) + 1.0);
+        for (String w : tokens) {
+            if (!queryTfidf.containsKey(w)) queryTfidf.put(w, 1.0);
+            else queryTfidf.put(w, queryTfidf.get(w) + 1.0);
         }
 
-        for(Map.Entry<String, Double> entry : queryTfidf.entrySet()){
+        for (Map.Entry<String, Double> entry : queryTfidf.entrySet()) {
             String w = entry.getKey();
-            if(!idf.containsKey(w)) entry.setValue(0.0);
-            else{
+            if (!idf.containsKey(w)) entry.setValue(0.0);
+            else {
                 Double tf = entry.getValue();
-                entry.setValue(tf* idf.get(w));
+                entry.setValue(tf * idf.get(w));
             }
         }
 
@@ -698,7 +690,7 @@ public class InvertedIndexManager {
      */
     public int getNumDocuments(int segmentNum) {
         DocumentStore mapDBGetIdx = MapdbDocStore.createOrOpenReadOnly(idxFolder + "DocStore_" + segmentNum);
-        int sz = (int)mapDBGetIdx.size();
+        int sz = (int) mapDBGetIdx.size();
         mapDBGetIdx.close();
         return sz;
     }
@@ -709,17 +701,17 @@ public class InvertedIndexManager {
      */
     public int getDocumentFrequency(int segmentNum, String token) {
         // check whether we should create new dictMap
-        if(segmentNum != rankingSegId){
+        if (segmentNum != rankingSegId) {
             resetRankingParam(segmentNum);
         }
 
-        if(!rankingDictMap.keySet().contains(token)){
+        if (!rankingDictMap.keySet().contains(token)) {
             return 0;
         }
         return rankingDictMap.get(token).get(4); // 5th element is the number of Docs
     }
 
-    public void resetRankingParam(int segmentNum){
+    public void resetRankingParam(int segmentNum) {
         rankingSegId = segmentNum;
         rankingDictMap.clear();
 
@@ -737,7 +729,6 @@ public class InvertedIndexManager {
 
         segMgr.close();
     }
-
 
 
     /**
@@ -800,7 +791,7 @@ public class InvertedIndexManager {
 
     private void getSegment(int segmentNum, boolean isPositional,
                             Map<String, List<Integer>> invertedLists,
-                            Map<Integer, Document> documents, Table<String, Integer, List<Integer>> positions){
+                            Map<Integer, Document> documents, Table<String, Integer, List<Integer>> positions) {
 
         SegmentInDiskManager segMgr = new SegmentInDiskManager(idxFolder, Integer.toString(segmentNum), iiCompressor);
         segMgr.readInitiate();
@@ -817,7 +808,7 @@ public class InvertedIndexManager {
         // initiate for reading posting list
         segMgr.readPostingInitiate();
         segMgr.readTFInitiate();
-        if(isPositional) {
+        if (isPositional) {
             segMgr.readPositionInitiate();
             segMgr.readPositionMetaInitiate();
         }
@@ -828,7 +819,7 @@ public class InvertedIndexManager {
 
             invertedLists.put(entry.getKey(), docIdList1.keySet().stream().collect(Collectors.toCollection(ArrayList::new)));
 
-            if(isPositional) {
+            if (isPositional) {
                 for (Map.Entry<Integer, List<Integer>> position : docIdList1.entrySet()) {
                     List<Integer> positionList = segMgr.readPosList(position.getValue().get(0),
                             position.getValue().get(1), position.getValue().get(2));
@@ -847,6 +838,7 @@ public class InvertedIndexManager {
 
         mapDBGetIdx.close();
     }
+
     private void merge(int id1, int id2) {
         // get segment id and docId size
         int sz1;
@@ -1004,7 +996,7 @@ public class InvertedIndexManager {
             for (Map.Entry<Integer, List<Integer>> docId : docIdList.entrySet()) {
                 // p4 insert term frequency list
                 int sz = docId.getValue().size();
-                segMgrMerge.insertTFList(docId.getValue().get(sz-1));
+                segMgrMerge.insertTFList(docId.getValue().get(sz - 1));
                 if (isPositionalIndex()) {
                     List<Integer> positionalList;
                     if (counter < lst1Sz[0]) {
