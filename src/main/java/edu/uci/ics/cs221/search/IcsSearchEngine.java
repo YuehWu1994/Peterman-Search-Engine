@@ -2,17 +2,20 @@ package edu.uci.ics.cs221.search;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.MinMaxPriorityQueue;
+import com.google.common.collect.Multiset;
 import com.google.common.collect.Ordering;
+import com.google.common.collect.TreeMultiset;
 import edu.uci.ics.cs221.index.inverted.InvertedIndexManager;
 import edu.uci.ics.cs221.index.inverted.Node;
 import edu.uci.ics.cs221.index.inverted.Pair;
+import edu.uci.ics.cs221.index.inverted.ScoreSet;
 import edu.uci.ics.cs221.storage.Document;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-
+import java.util.stream.Collectors;
 
 public class IcsSearchEngine {
 
@@ -155,7 +158,9 @@ public class IcsSearchEngine {
             }
             documents.add(new Pair<>(doc.getLeft(), combinedScore));
         }
-        return documents.iterator();
+        List<Pair<Document, Double>> result = documents.stream().collect(Collectors.toCollection(ArrayList::new));
+        Collections.sort(result, Collections.reverseOrder());
+        return result.iterator();
     }
 
     /**
