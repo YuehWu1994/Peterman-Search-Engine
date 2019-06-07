@@ -1,6 +1,8 @@
 package edu.uci.ics.cs221.index.inverted;
 
-public class ScoreSet implements Comparable<ScoreSet> {
+import java.util.Comparator;
+
+public class ScoreSet implements Comparable<ScoreSet>, Comparator<ScoreSet> {
     public double Score;
     public DocID Doc;
 
@@ -15,5 +17,11 @@ public class ScoreSet implements Comparable<ScoreSet> {
         if(this.Score < other.Score) return -1;
         if(this.Score > other.Score) return 1;
         return 0;
+    }
+
+
+    @Override
+    public int compare(ScoreSet o1, ScoreSet o2) {
+        return o1.compareTo(o2);
     }
 }

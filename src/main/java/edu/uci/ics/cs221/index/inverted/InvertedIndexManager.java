@@ -1,10 +1,7 @@
 package edu.uci.ics.cs221.index.inverted;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Iterators;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Table;
-import com.google.common.collect.TreeBasedTable;
+import com.google.common.collect.*;
 import edu.uci.ics.cs221.analysis.Analyzer;
 import edu.uci.ics.cs221.storage.DocumentStore;
 import edu.uci.ics.cs221.storage.MapdbDocStore;
@@ -571,8 +568,19 @@ public class InvertedIndexManager {
     }
 
     public List<ScoreSet> calculateScore(List<String> tokens, File[] files, Map<String, Double> idf, Integer topK){
-        PriorityQueue<ScoreSet> pq = new PriorityQueue<>();
-
+        //PriorityQueue<ScoreSet> pq = new PriorityQueue<>();
+        Comparator<ScoreSet> comp = Ordering.natural().reverse();
+        MinMaxPriorityQueue<ScoreSet> pq;
+        if(topK == null) {
+            pq = MinMaxPriorityQueue.orderedBy(comp).create();
+        }
+        else if(topK == 0){
+            pq = MinMaxPriorityQueue.orderedBy(comp).create();
+            return pq.stream().collect(Collectors.toCollection(ArrayList::new));
+        }
+        else{
+            pq = MinMaxPriorityQueue.orderedBy(comp).maximumSize(topK).create();
+        }
         // setup tfidf of query
         Map<String, Double> queryTfidf = setTfidfQuery(tokens, idf);
 
@@ -597,9 +605,10 @@ public class InvertedIndexManager {
 
             // initiate
             segMgr.readPostingInitiate();
-            segMgr.readPositionMetaInitiate();
-            segMgr.readPositionInitiate();
-
+            if(isPositionalIndex()) {
+                segMgr.readPositionMetaInitiate();
+                segMgr.readPositionInitiate();
+            }
             segMgr.readTFInitiate();
 
             // calculate tfidf and accumulate cosine similarity
@@ -638,25 +647,29 @@ public class InvertedIndexManager {
                 if(!dotProductAccumulator.containsKey(j) || (dotProductAccumulator.get(j) == 0.0 && vectorLengthAccumulator.get(j) == 0.0)) continue;
 
                 ss = new ScoreSet(dotProductAccumulator.get(j)/ Math.sqrt(vectorLengthAccumulator.get(j)), new DocID(Integer.parseInt(fileIdxStr), j));
-                pq.add(ss);
+                if(topK != null) {
+                    if(pq.size() < topK) {
+                        pq.add(ss);
+                    }
+                        else
+                        {
+                            if (pq.peekLast().compareTo(ss) == -1) {
+                                pq.add(ss);
+                            }
+                        }
+                    }
 
-                // check null
-                if(topK != null && pq.size() > topK){
-                    pq.poll(); // assume that the peek value is the smallest one !!!
+                else{
+                    pq.add(ss);
                 }
-
             }
         }
 
         // transform to docID list
-        List<ScoreSet> scoreSetlist = new ArrayList<>();
-        while(!pq.isEmpty()){
-            ScoreSet ss = pq.poll();
-            scoreSetlist.add(ss);
-        }
-        Collections.reverse(scoreSetlist);
 
-        return scoreSetlist;
+        //Collections.reverse(scoreSetlist);
+
+        return pq.stream().collect(Collectors.toCollection(ArrayList::new));
     }
 
 
