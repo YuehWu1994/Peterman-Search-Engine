@@ -540,11 +540,8 @@ public class InvertedIndexManager {
         return iterator;
     }
 
-
-
     public void setIDF(List<String> tokens, File[] files, Map<String, Double> idf){
         Set<String> tokenSet = new HashSet<>(tokens);
-
         //loop through every segment
         int numDoc = 0;
 
