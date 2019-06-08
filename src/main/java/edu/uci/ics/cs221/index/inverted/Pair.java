@@ -2,7 +2,7 @@ package edu.uci.ics.cs221.index.inverted;
 
 import java.util.Objects;
 
-public class Pair<L, R> {
+public class Pair<L, R> implements Comparable<Pair<L, R>>{
 
     private final L left;
     private final R right;
@@ -45,4 +45,13 @@ public class Pair<L, R> {
                 ", right=" + right +
                 '}';
     }
+
+    @Override
+    public int compareTo(Pair<L, R> o) {
+        if(!(getRight() instanceof Double)){
+            throw new UnsupportedOperationException();
+        }
+        return ((Double) getRight()).compareTo((Double)o.getRight());
+    }
+
 }

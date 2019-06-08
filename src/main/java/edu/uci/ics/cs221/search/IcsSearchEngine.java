@@ -1,27 +1,27 @@
 package edu.uci.ics.cs221.search;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.MinMaxPriorityQueue;
+import com.google.common.collect.Ordering;
 import edu.uci.ics.cs221.index.inverted.InvertedIndexManager;
 import edu.uci.ics.cs221.index.inverted.Node;
 import edu.uci.ics.cs221.index.inverted.Pair;
 import edu.uci.ics.cs221.storage.Document;
-
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 
-import static java.util.stream.Collectors.toList;
 
 public class IcsSearchEngine {
 
     private static Path docDir;
     private static InvertedIndexManager ii;
     private HashMap<Integer, Node> nodes;
+
     /**
      * Initializes an IcsSearchEngine from the directory containing the documents and the
-     *
      */
     public static IcsSearchEngine createSearchEngine(Path documentDirectory, InvertedIndexManager indexManager) {
 
@@ -38,15 +38,14 @@ public class IcsSearchEngine {
      * Writes all ICS web page documents in the document directory to the inverted index.
      */
     public void writeIndex() {
-        File dir = new File(docDir.toString()+"/cleaned");
+        File dir = new File(docDir.toString() + "/cleaned");
         File[] files = dir.listFiles();
         sort(files);
-        for(int i = 0; i < files.length; i++){
+        for (int i = 0; i < files.length; i++) {
             try {
                 String text = new String(Files.readAllBytes(files[i].toPath()), StandardCharsets.UTF_8);
                 ii.addDocument(new Document(text));
-            }
-            catch (IOException e) {
+            } catch (IOException e) {
                 e.printStackTrace();
             }
 
@@ -60,56 +59,46 @@ public class IcsSearchEngine {
      */
     public void computePageRank(int numIterations) {
         double dampingFactor = 0.85;
-        File file = new File(docDir.toString() + "/id-graph.tsv");
-
+        //Integer source, target;
         try {
-            BufferedReader br = new BufferedReader(new FileReader(file));
-            String st;
-            List<Integer> edge;
-            Integer source, target;
-            while ((st = br.readLine()) != null){
-                edge = Arrays.stream(st.split("\\s+")).map(Integer::parseInt).collect(toList());
-                source = edge.get(0);
-                target = edge.get(1);
+            Files.readAllLines(docDir.resolve("id-graph.tsv")).stream().map(line -> line.split("\\s")).forEach(line -> {
+                Integer source = Integer.parseInt(line[0]);
+                Integer target = Integer.parseInt(line[1]);
                 Node sourceNode = new Node();
                 Node stargetNode = new Node();
-                if(nodes.containsKey(source)) {
+                if (nodes.containsKey(source)) {
                     sourceNode = nodes.get(source);
                 }
                 sourceNode.setOutgoingSize(sourceNode.getOutgoingSize() + 1);
-                    nodes.put(source, sourceNode);
-                if(nodes.containsKey(target)) {
+                nodes.put(source, sourceNode);
+                if (nodes.containsKey(target)) {
                     stargetNode = nodes.get(target);
                 }
                 stargetNode.addIncomingNode(source);
                 nodes.put(target, stargetNode);
-            }
-            br.close();
-            //loop through number of iterations
-            for(int i = 0; i < numIterations; i++){
-                double currentScore, incomingScores = 0;
-                //loop through all pages
-                for (Map.Entry<Integer, Node> entry : nodes.entrySet()) {
-                    Node page = entry.getValue();
-                    //to calculate current score, PR(P) = (1-d) + d ∑ (PR(Pi)/C(Pi))
-                    currentScore = 1 - dampingFactor;
-                    //for every page loop through all its incoming edges
-                    List<Integer> incoming = page.getIncoming();
-                    for(int j = 0; j < incoming.size(); j++){
-                        incomingScores+= calculateIncomingScore(incoming.get(j));
-                    }
-                    currentScore += dampingFactor * incomingScores;
-                    page.setCurrentScore(currentScore);
-                    nodes.put(entry.getKey(), page);
-                    incomingScores = 0;
-                }
-                setPreviousScore();
-            }
-        } catch (FileNotFoundException e) {
+            });
+        } catch (IOException e) {
             e.printStackTrace();
         }
-        catch (IOException e) {
-            e.printStackTrace();
+        //loop through number of iterations
+        for (int i = 0; i < numIterations; i++) {
+            double currentScore, incomingScores = 0;
+            //loop through all pages
+            for (Map.Entry<Integer, Node> entry : nodes.entrySet()) {
+                Node page = entry.getValue();
+                //to calculate current score, PR(P) = (1-d) + d ∑ (PR(Pi)/C(Pi))
+                currentScore = 1 - dampingFactor;
+                //for every page loop through all its incoming edges
+                List<Integer> incoming = page.getIncoming();
+                for (int j = 0; j < incoming.size(); j++) {
+                    incomingScores += calculateIncomingScore(incoming.get(j));
+                }
+                currentScore += dampingFactor * incomingScores;
+                page.setCurrentScore(currentScore);
+                nodes.put(entry.getKey(), page);
+                incomingScores = 0;
+            }
+            setPreviousScore();
         }
     }
 
@@ -130,36 +119,48 @@ public class IcsSearchEngine {
 
     /**
      * Searches the ICS document corpus and returns the top K documents ranked by combining TF-IDF and PageRank.
-     *
+     * <p>
      * The search process should first retrieve ALL the top documents from the InvertedIndex by TF-IDF rank,
      * by calling `searchTfIdf(query, null)`.
-     *
+     * <p>
      * Then the corresponding PageRank score of each document should be retrieved. (`computePageRank` will be called beforehand)
      * For each document, the combined score is  tfIdfScore + pageRankWeight * pageRankScore.
-     *
+     * <p>
      * Finally, the top K documents of the combined score are returned. Each element is a pair of <Document, combinedScore>
-     *
-     *
+     * <p>
+     * <p>
      * Note: We could get the Document ID by reading the first line of the document.
      * This is a workaround because our project doesn't support multiple fields. We cannot keep the documentID in a separate column.
      */
     public Iterator<Pair<Document, Double>> searchQuery(List<String> query, int topK, double pageRankWeight) {
         Iterator<Pair<Document, Double>> iterator = ii.searchTfIdf(query, null);
-        //List<Pair<Integer, Double>> pageRankScores = getPageRankScores();
-        PriorityQueue<Pair<Document, Double>> documents = new PriorityQueue<>(topK);
-        double tfidfScore, pageRankScore;
-        while(iterator.hasNext()){
-            Pair<Document, Double> doc = iterator.next();
+        Comparator<Pair<Document, Double>> comp = Ordering.natural().reverse();
+        MinMaxPriorityQueue<Pair<Document, Double>> documents = MinMaxPriorityQueue.orderedBy(comp).maximumSize(topK).create();
+        double tfidfScore, pageRankScore, combinedScore;
+        Pair<Document, Double> doc;
+        while (iterator.hasNext()) {
+            pageRankScore = 0;
+            doc = iterator.next();
             String docText = doc.getLeft().getText();
-            int docId = Integer.parseInt(docText.substring(0, docText.indexOf("\n") + 1));
+            int docId = Integer.parseInt(docText.substring(0, docText.indexOf("\n")));
             tfidfScore = doc.getRight();
-            pageRankScore = nodes.get(docId).getCurrentScore();//getPageRankScore(docId, pageRankScores);//get from the list pageRankScores
-            //add the score and add to priority queue
-            documents.add(new Pair<>(doc.getLeft(), tfidfScore + pageRankWeight * pageRankScore));
+            if (nodes.containsKey(docId)) {
+                pageRankScore = nodes.get(docId).getCurrentScore();
+            }
+            combinedScore = tfidfScore + pageRankWeight * pageRankScore;
+
+            if ((documents.size() > 0 && documents.peekLast().getRight() > combinedScore)
+                    || (documents.size() == topK && documents.peekLast().getRight() == combinedScore)) {
+                continue;
+            }
+            documents.add(new Pair<>(doc.getLeft(), combinedScore));
         }
         return documents.iterator();
     }
-    /**===========helper functions================*/
+
+    /**
+     * ===========helper functions================
+     */
 
     private void sort(File[] files) {
         Arrays.sort(files, new Comparator<File>() {
@@ -184,25 +185,12 @@ public class IcsSearchEngine {
         });
     }
 
-    private String getDocumentText(Integer docId){
-        String str = "";
-        File file = new File(docDir.toString()+"/cleaned/" + docId);
-        try {
-            str = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
-            str = str.substring(str.indexOf('\n')+1);//remove first line for docId
-            str = str.substring(str.indexOf('\n')+1);//remove second line for url
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return str;
-    }
-
-    private double calculateIncomingScore(Integer docId){
+    private double calculateIncomingScore(Integer docId) {
         Node node = nodes.get(docId);
         return node.getPrevScore() / node.getOutgoingSize();
     }
 
-    private void setPreviousScore(){
+    private void setPreviousScore() {
         for (Map.Entry<Integer, Node> entry : nodes.entrySet()) {
             Node page = entry.getValue();
             page.setPrevScore(page.getCurrentScore());
@@ -210,9 +198,4 @@ public class IcsSearchEngine {
         }
     }
 
-   /* private double getPageRankScore(int docId, List<Pair<Integer, Double>> pageRankScores){
-        double score = 0;
-
-        return score;
-    }*/
 }

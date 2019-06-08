@@ -1,21 +1,16 @@
 package edu.uci.ics.cs221.index.ranking;
 
-import edu.uci.ics.cs221.analysis.ComposableAnalyzer;
-import edu.uci.ics.cs221.analysis.PorterStemmer;
-import edu.uci.ics.cs221.analysis.PunctuationTokenizer;
-import edu.uci.ics.cs221.index.inverted.DeltaVarLenCompressor;
-import edu.uci.ics.cs221.index.inverted.InvertedIndexManager;
-import edu.uci.ics.cs221.index.inverted.Pair;
+import edu.uci.ics.cs221.analysis.*;
+import edu.uci.ics.cs221.index.inverted.*;
 import edu.uci.ics.cs221.storage.Document;
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
+
+import java.util.*;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -97,22 +92,17 @@ public class Team17searchTfIdfTest {
 
         //Create and add documents
         Document doc1 = new Document("The purpose of life is to code");
-        Document doc2 = new Document("The purpose of life The purpose of life The purpose of life is to eat good food");
-        Document doc3 = new Document("The Purpose");
-        Document doc4 = new Document("Life of Pi is a good movie");
-        Document doc5 = new Document("What is the purpose of knowing about after-life");
+        Document doc2 = new Document("The purpose of life of life of life is to eat good food");
+        Document doc3 = new Document("Life of Pi is a good movie");
 
-        iim.addDocument(doc1);
         iim.addDocument(doc1);
         iim.addDocument(doc2);
         iim.addDocument(doc3);
-        iim.addDocument(doc4);
-        iim.addDocument(doc5);
         iim.flush();
 
         List<String> searchKeyword = new ArrayList<>(Arrays.asList("The", "purpose", "of", "life", "is"));
 
-        Iterator<Pair<Document, Double>> res = iim.searchTfIdf(searchKeyword, 2);
+        Iterator<Pair<Document, Double>> res = iim.searchTfIdf(searchKeyword, 3);
 
 
         List<String> expected = new ArrayList<String>();
@@ -120,16 +110,17 @@ public class Team17searchTfIdfTest {
         int count = 0;
 
         //Check which of these are topK
-        expected.add(doc2.getText());
         expected.add(doc1.getText());
-
+        expected.add(doc2.getText());
+        expected.add(doc3.getText());
 
         while(res.hasNext()){
             count ++;
-            actual.add(res.next().getLeft().getText());
+            Pair<Document, Double> result = res.next();
+            actual.add(result.getLeft().getText());
         }
 
-        assertEquals(2, count);
+        assertEquals(3, count);
         Assert.assertEquals(expected, actual);
     }
 

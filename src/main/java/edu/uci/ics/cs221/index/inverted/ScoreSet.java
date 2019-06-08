@@ -1,6 +1,6 @@
 package edu.uci.ics.cs221.index.inverted;
 
-public class ScoreSet implements Comparable<ScoreSet> {
+public class ScoreSet implements Comparable<ScoreSet>{
     public double Score;
     public DocID Doc;
 
@@ -12,8 +12,7 @@ public class ScoreSet implements Comparable<ScoreSet> {
     // not sure the priority !!!
     @Override
     public int compareTo(ScoreSet other) {
-        if(this.Score < other.Score) return -1;
-        if(this.Score > other.Score) return 1;
-        return 0;
+        return Double.compare(this.Score, other.Score);
     }
+
 }
