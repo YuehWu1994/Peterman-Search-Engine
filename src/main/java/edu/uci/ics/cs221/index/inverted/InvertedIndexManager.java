@@ -540,7 +540,7 @@ public class InvertedIndexManager {
         return iterator;
     }
 
-    public void setIDF(List<String> tokens, File[] files, Map<String, Double> idf){
+    public void setIDF(List<String> tokens, File[] files, Map<String, Double> idf) {
         Set<String> tokenSet = new HashSet<>(tokens);
         //loop through every segment
         int numDoc = 0;
@@ -553,7 +553,7 @@ public class InvertedIndexManager {
 
 
             // get/accumulate document frequency
-            for(String w : tokenSet){
+            for (String w : tokenSet) {
 
                 int docFreq = getDocumentFrequency(Integer.parseInt(fileIdxStr), w);
                 if (!idf.containsKey(w)) idf.put(w, (double) docFreq);
@@ -642,10 +642,12 @@ public class InvertedIndexManager {
             for (int j = 0; j < segNumDoc; ++j) {
                 ScoreSet ss;
 
-                if (!dotProductAccumulator.containsKey(j) || (dotProductAccumulator.get(j) == 0.0 && vectorLengthAccumulator.get(j) == 0.0))
+                if (!dotProductAccumulator.containsKey(j))
                     continue;
-
-                ss = new ScoreSet(dotProductAccumulator.get(j) / Math.sqrt(vectorLengthAccumulator.get(j)), new DocID(Integer.parseInt(fileIdxStr), j));
+                if (dotProductAccumulator.get(j) == 0.0 && vectorLengthAccumulator.get(j) == 0.0)
+                    ss = new ScoreSet(0.0, new DocID(Integer.parseInt(fileIdxStr), j));
+                else
+                    ss = new ScoreSet(dotProductAccumulator.get(j) / Math.sqrt(vectorLengthAccumulator.get(j)), new DocID(Integer.parseInt(fileIdxStr), j));
                 if (topK != null) {
                     if (pq.size() < topK) {
                         pq.add(ss);
