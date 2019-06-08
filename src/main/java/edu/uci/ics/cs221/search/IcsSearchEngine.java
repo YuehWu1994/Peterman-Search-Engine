@@ -152,7 +152,7 @@ public class IcsSearchEngine {
             }
             combinedScore = tfidfScore + pageRankWeight * pageRankScore;
 
-            if ((documents.size() > 0 && documents.peekLast().getRight() > combinedScore)
+            if ((documents.size() > 0 && documents.peekLast().getRight() > combinedScore && documents.size() > topK)
                     || (documents.size() == topK && documents.peekLast().getRight() == combinedScore)) {
                 continue;
             }
