@@ -1,4 +1,4 @@
-## Peterman Search Engine
+# Peterman Search Engine
 This is the course Projects of Information Retrieval taken place at UC Irvine on Spring 2019. It appies Java to fulfill the following functionalities
 - Tokenization, Word-breaker, Porter Stemming
 - Disk-based Inverted Index
